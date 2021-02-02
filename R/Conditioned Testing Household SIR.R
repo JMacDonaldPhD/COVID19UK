@@ -35,7 +35,8 @@ conditionalTestingHouseholdSIR <- function(sampleData, pop, startTime = 0, endTi
 
 
   positiveFirstStageTests <- sampleData$ptveFirstStage
-  obs_index <- which(colSums(positiveFirstStageTests) > 0)
+  firstStageTests <- sampleData$firstStageTests
+  obs_index <- which(colSums(firstStageTests) > 0)
   conditioned_hh <- length(obs_index)
   # Construct Population State Matrix using infectious status and groups
   StateX <- colSums(Hstate)
@@ -49,8 +50,7 @@ conditionalTestingHouseholdSIR <- function(sampleData, pop, startTime = 0, endTi
   # betaI, reduction in infection rate due to quarantine or hospitalisation
   # rho, probability of moving from presymtomatic to symptomatic in one day
   # gamma, probability of dying or becoming immune to COVID19 in one day
-  day <- 1
-  dailyProg <- function(StateX, Hstate, beta_G, beta_H, gamma){
+  dailyProg <- function(StateX, Hstate, beta_G, beta_H, gamma, day){
     # Calculates the number of infected individuals exerting pressure on each susceptible individual
 
     globalInfPressure <- beta_G*StateX[2]/N
@@ -69,11 +69,15 @@ conditionalTestingHouseholdSIR <- function(sampleData, pop, startTime = 0, endTi
       # in the future. This is so there are sufficient susceptibles for future days
 
       # sum(positiveFirstStageTests[-(1:day), i]) is the number of future positive tests
-      possibleNoInfections <-
-        which(positiveFirstStageTests[day, i] <= c(1:Hstate[i, 1]) &
-                c(1:Hstate[i, 1]) <= Hstate[i, 1] - sum(positiveFirstStageTests[-(1:day), i]))
 
-      c <- pbinom(c(positiveFirstStageTests[day, i] - 1, possibleNoInfections), size = Hstate[i, 1], prob = infProb[i])
+      possibleNoInfections <- (0:Hstate[i, 1])[firstStageTests[day, i] <= c(0:Hstate[i, 1]) &
+                                                 c(0:Hstate[i, 1]) <= Hstate[i, 1] - sum(firstStageTests[-(1:day), i])]
+      # possibleNoInfections <- (0:Hstate[i, 1])[positiveFirstStageTests[day, i] <= c(0:Hstate[i, 1]) &
+      #                                            c(0:Hstate[i, 1]) <= Hstate[i, 1] - sum(positiveFirstStageTests[-(1:day), i])]
+        # which(positiveFirstStageTests[day, i] <= c(0:Hstate[i, 1]) &
+        #         c(0:Hstate[i, 1]) <= Hstate[i, 1] - sum(positiveFirstStageTests[-(1:day), i]))
+
+      c <- pbinom(c(possibleNoInfections[1] - 1, possibleNoInfections), size = Hstate[i, 1], prob = infProb[i])
 
       Pcontribution <- max(c) - min(c)
       U <- runif(1, min(c), max(c))
@@ -128,18 +132,17 @@ conditionalTestingHouseholdSIR <- function(sampleData, pop, startTime = 0, endTi
 
     Infections <- A[-1, ]
 
-    for(i in 1:noDays){
+    for(day in 1:noDays){
 
       # ==== Daily Contact ====
 
       #debug(dailyProg)
-      #print(c("==== Day", day))
-      # if(day == 2){
+      # print(c("==== Day", day))
+      # if(day == 4){
       #   debug(dailyProg)
       # }
-      debug(dailyProg)
       dayProgression <- dailyProg(StateX, Hstate, beta_G, beta_H,
-                                  gamma)
+                                  gamma, day)
       StateX <- dayProgression$StateX
       Hstate <- dayProgression$Hstate
       epidemic$S[day + 1, ] <- Hstate[,1]
@@ -147,7 +150,6 @@ conditionalTestingHouseholdSIR <- function(sampleData, pop, startTime = 0, endTi
       epidemic$R[day + 1, ] <- Hstate[,3]
       SIRsummary[day + 1, ] <- dayProgression$StateX
       Infections[day, ] <- dayProgression$Infections
-      day <- day + 1
     }
     return(list(Hstate = epidemic, SIRsummary = SIRsummary,
                 householdFinalSize = rowSums(Hstate[, 2:3]) - startingSize,

@@ -27,6 +27,7 @@ testingNGF <- function(completeData, obsParam){
   n_trials <- length(completeData$Infections)
 
   NROWS <- nrow(completeData$Infections)
+  # Testing; Which of the new cases which are tested are detected.
   NCOLS <- ncol(completeData$Infections)
 
   # Which new cases are tested
@@ -100,8 +101,10 @@ testingLlh <- function(completeData, sampleData, obsParam){
   NCOLS <- ncol(completeData$Infections)
   llh_alpha <- sum(dbinom(sampleData$firstStageTests, size = completeData$Infections, prob = alpha, log = TRUE))
   print(llh_alpha)
+
+  # First stage testing probability, only reliant on sample dataset
   llh_firstStageTest <- sum(dbinom(sampleData$ptveFirstStage, size = sampleData$firstStageTests, prob = pi, log = TRUE))
-  #print(llh_firstStageTest)
+  print(llh_firstStageTest)
 
   if(llh_alpha == -Inf | llh_firstStageTest == -Inf){
     return(-Inf)
