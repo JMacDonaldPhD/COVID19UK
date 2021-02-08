@@ -1,0 +1,180 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+
+Welcome to the COVID19UK package by Josh MacDonald. Despite it's name, this package does not only deal with COVID19 data. The main goal of this package is to be able to build a statistical epidemic model in a modular way, making it possible to define everything from assumptions about the underlying epidemic model to the how the epidemic is observed . This workflow workbook will focus on doing this using functions from the COVID19UK package to define an SIR epidemic model with a household population structure. A sampling process is then defined which tests individuals who enter the infectious state, with a positive test resulting in testing for the rest of the household that individual resides in. 
+
+The block below will install the `COVID19UK` package from github, if you haven't already (or if it isn't up-to-date). R may ask you to update some packages.
+
+
+```{r}
+
+# Check COVIDUK19 Package is installed from Github (Optional Uninstall at foot of notebook)
+
+if("COVID19UK" %in% installed.packages()){
+  if(!(packageVersion("COVID19UK") == "0.1.0")){
+    print("Package installed, but not up to date. Updating:")
+    remotes::install_github("JMacDonaldPhD/COVID19UK")
+  } else{
+    print("Package installed and up to date")
+  }
+} else{
+  print("Package not installed. Installing:")
+  remotes::install_github("JMacDonaldPhD/COVID19UK")
+}
+
+# Run to uninstall package (Windows)
+#remove.packages("COVID19UK", lib="~/R/win-library/3.6")
+
+
+
+```
+
+Create a population structure. This should be a dataframe, with each row representing an individual in the population. Each individiual has a unique ID number, a household ID, and the epidemic state they are currently in. These 3 variables are the columns of the dataframe.
+
+```{r}
+
+
+N <- 200 # Size of the population
+N_h <- 4 # Size of each household
+
+# Define initial state of individuals
+indState0 <- rep(1, N)
+indState0[(1:10)*4] <- 2 # Setting one person out of the first 10 households to be infected
+
+# dataframe structure for population
+pop <- data.frame(ID = 1:N,
+                  householdID = as.vector(sapply(X = 1:(N/N_h), function(X) return(rep(X, N_h)))),
+                  state = indState0)
+
+# Should probably bake this into HouseholdSIR function. Why do I need to do it? Some matrix sum breaks if I don't do this.
+pop$state <- factor(pop$state, levels = 1:3, labels = c("S", "I", "R"))
+
+
+```
+
+
+Create simulation model. The `HouseholdSIR` function takes the population structure and time frame as arguments, and returns another function which simulates a stochastic (discrete time) SIR epidemic over the given timeframe and population structure (given a set of epidemic parameters)
+
+
+```{r}
+
+simulator <- COVID19UK::HouseholdSIR(pop, endTime = 5) # Default start time is startTime = 0
+
+```
+
+
+Now, we can define the parameters for simulation and simulate a Household SIR epidemic. There are three parameters to be defined. The first two concern the passing of infection. $beta_G$ concerns the infection rate globally, between individuals not within the same household. $beta_H$ concerns the household infection rate, i.e the rate of infectious contact between those residing in the same household. The final parameter $gamma$ concerns the movement into the removed compartment. The average number of days that in individual is infectious for is $1/gamma$.
+
+```{r}
+# Define epidemic parameters
+simParam <- c(beta_G = .25, beta_H = .2, gamma = .25)
+
+# Simulate an epidemic
+simOutput <- simulator(simParam) # This is the simulator function created above, not a function with the COVID19UK package.
+
+
+```
+
+
+Visualising the epidemic here.
+
+```{r}
+
+# visualising the epidemic here. 
+
+```
+
+
+So far, we have defined the underlying epidemic model and simulated a realisation of such an epidemi given a set of parameters. Ultimately, we are interested in analysing epidemic data, with the goal of estimating the epidemic parameters and/or make projections, which will inform decision-making. Ideally, we would like to know the epidemic state of every individaul, on every day within a given time frame. Unfortunately, this is most likely not possible due to time/money constraints, or the inability to observe an individuals epidemic state with absolute certainty. Consequently, we must rely on a subset of the epidemic data for analysis. This brings many challanges, as well as many proposed ways to overcome these challenges.
+
+One challenge which is applicable in a lot of situations, is there not being a closed form for the likelihood of epidemic parameters, given the sampled data (the underlying epidemic process is assumed to be unobserved). To overcome this, an unbiased estimate of the this likelihood is constructed, which can then be used as a proxy for Maximum Likelihood Estimation, or in a Bayesian setting, in a Markov chain Monte Carlo sampler (which requires a closed form likelihood).
+
+Let's first focus on obtaining a sample of epidemic data. The example below takes the epidemic simulated above (`simOutput`) and applys an observation process. The observation process is an informed testing scheme, which recruits of portion of individuals who move into the infectious state. On arrival to the infectious state, there is a non-zero probability $\alpha$ that the individual will be tested. If the test returns a positive results, the rest of the individuals household is tested. Of course, the test is imperfect, with the uncertainty of the test depending on the true state of the individual being tested. The specitivity $\pi$ is the probability of a positive test result, given the individual is in fact infectious. The sensitivity $\psi$ is the probability of a negative test result, given the individual is not infectious. These 3 parameters are specific to the observation process and so will be referred to as the observation parameters. The `TestingNGF` function will carry out the above testing scheme, given a set of observation parameters and a realisation of a household SIR epidemic.
+
+```{r}
+
+testingData <- COVID19UK::testingNGF(simOutput, c(0.5, 0.9, 0.6)) # NGF := Noise Generating Function
+
+```
+
+It may already be clear how we cannot calculate the likelihood of this sample data being obtained, given only the epidemic parameters. The uncertainty of all test results is dependent on the actual epidemic state of the individuals being tested. Hence the uncertainty in the sample data cannot be quantified without more information about the underlying epidemic process. The `testingLlh` function will calcualte the probability of a sample being generated, given a underlying epidemic process and a set of observation parameters.
+
+```{r}
+COVID19UK::testingLlh(simOutput, testingData, c(0.5, 0.9, 0.6))
+
+```
+
+Clearly, the probability of obsersving the generated sample dataset is non-zero, given that the underlying epidemic process and observation parameters provided actually generated the sample dataset itself. Changing the observation parameters will give a different result.
+
+```{r}
+
+# First value is log-likelihood of recruiting individuals who have become infectious
+# Second Value is log-likelihood of first stage tests (i.e the results of testing those who were recruited)
+# The final result is the first 2 values added plus the log-likehood of second stage testing (i.e the results of test
+# from households which had a positive first stage test)
+COVID19UK::testingLlh(simOutput, testingData, c(0.1, 0.9, 0.6))
+
+```
+
+So we can calculate the likelihood of observing the testing sample, given the underlying epidemic process. What we would like to do is calculate the likelihood of the epidemic parameters given the sample data. In the absence of a closed form expression for this likelihood, we cannot calculate this exactly, only estimate/approximate it. The below result shows how we may attain a unbiased estimate of the likelihood through Monte Carlo sampling.
+
+
+* blah blah blah *
+
+
+Straight Simulations
+
+```{r}
+
+
+uncondSimOutput <- simulator(simParam)
+
+COVID19UK::testingLlh(uncondSimOutput, testingData c(0.5, 0.9, 0.6))
+
+
+```
+
+
+Conditional Simualtions 
+
+```{r}
+
+# Creates a simulator which conditions on the testing data
+condSim <- COVID19UK::conditionalTestingHouseholdSIR(testingData, pop, startTime = 0 , endTime = 5)
+
+condSimOutput <- condSim(simParam)
+
+
+COVID19UK::testingLlh(condSimOutput, testingData, c(0.5, 0.9, 0.6))
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
