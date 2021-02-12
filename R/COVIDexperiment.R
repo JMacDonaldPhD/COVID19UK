@@ -1,33 +1,45 @@
-# Experiment Function
+#' Epidemic Model
 
-# Takes an epidemic model, observation model and a set of parameters. Generates noise based on these parameters,
-# creates a closure function which then attempts to make inference on the noise through a Psuedo-Marginal MCMC.
-# This closure will take arguements related to the PM-MCMC, including which parameters are fixed and which are
-# to be made inference on.
+#' Takes an underlying epidemic model, observation model and a set of parameters. Generates noise based on these parameters,
+#' creates a closure function which then attempts to make inference on the noise through a Psuedo-Marginal MCMC.
+#' This closure will take arguements related to the PM-MCMC, including which parameters are fixed and which are
+#' to be made inference on.
 
 
-COVIDexperiment <- function(experimentName, simulator, obsModel,
-                simParam, obsParam, dir, varSymbols, seed = NULL){
-
+#' @param simulator function which simulates the underlying epidemic process, given a set of parameters
+#' @param obsModel A list of two functions.One named `NGF` (Noise Generating Function), which generates data,
+#'                 a realisation of the underlying epidemic process (i.e output from `simulator`) and a set of
+#'                 observation parameters. The other, `llh`, calculates the likelihood of a given underlying
+#'                 epidemic process resulting in a given sample, given a set of observational parameters.
+#' @param simParam "True" values of the underlying epidemic process
+#' @param obsParam "True" values of the observation model
+#' @param varSymbols A vector of strings/expressions allocating names for the model parameters.
+#' @param seed Gives a seed to set, which will determine the underlying epidemic process generated, and the
+#'             sample generated, given a set of model parameters. If NULL, no seed is set and random number
+#'             generation will be based on current R session.
+#' @return A likelihood estimation function and MCMC set up function
+epiModel <- function(simulator, obsModel,
+                     simParam, obsParam, varNames, seed = NULL, conditional = TRUE){
+  print(ls(environment(fun = simulator)))
   # Create Directory for Experiments
   # If a directory already exists with name "dir", then the directory will not be created
   # but the wd will be set to dir
-  if(missing(dir)){
-    dir = "Experiments/"
-  }
-
-  if(!dir.exists(dir)){
-    dir.create(dir)
-  }
-  setwd(dir)
-
-  # Create Directory for this experiment
-  if(!dir.exists(experimentName)){
-    dir.create(experimentName)
-  }
-  setwd(experimentName)
-
-
+  # if(missing(dir)){
+  #   dir = "Experiments/"
+  # }
+  #
+  # if(!dir.exists(dir)){
+  #   dir.create(dir)
+  # }
+  # setwd(dir)
+  #
+  # # Create Directory for this experiment
+  # if(!dir.exists(experimentName)){
+  #   dir.create(experimentName)
+  # }
+  # setwd(experimentName)
+  #
+  #
 
 
   # ==== Simulate Positive test data ====
@@ -38,13 +50,20 @@ COVIDexperiment <- function(experimentName, simulator, obsModel,
 
   res <- simulator(param = simParam)
 
-  print(c("FINAL SIZE:", sum(res)))
+  #print(c("FINAL SIZE:", sum(res)))
   sampleData <- obsModel$NGF(res, obsParam)
   #totalPositiveCases <- colSums(dailyPositiveCases)
   likelihood <- obsModel$llh
 
-  # ==== Epidemic Summary Output
 
+  # Conditional Simulator
+  if(conditional){
+    simulator <- conditionalTestingHouseholdSIR(sampleData, pop, endTime = environment(fun = simulator)$endTime)
+  }
+
+
+
+  # ==== Epidemic Summary Output ====
 
 
   # ==== MCMC Functions ====
@@ -55,9 +74,17 @@ COVIDexperiment <- function(experimentName, simulator, obsModel,
   obsParamIndex <- (1:length(obsParam)) + length(simParam)
 
 
-  likelihoodCalc_function <- function(simParam.part, obsParam, noSims = 1, calc.sd = F){
+  #' Creates a function which calculates a Monte Carlo estimate for a given subset of parameters for the underlying epidemic process.
+
+  #' @param simParam_names Character vector describing which simulation parameters are to be profiled (according to the given value of)
+  #' @param obsParam A set of observation parameters to condition the likilhood calculation on
+  #' @param noSims Number of particles to simulate for Monte Carlo estimation of the likelihood
+  #' @param calc.sd If TRUE, the standard deviation of the estimate will also be calculated.
+  likelihoodCalc_function <- function(simParam_names, obsParam, noSims = 1, calc.sd = F){
+    simParam.subset <- which(varNames %in% simParam_names)
+    simParam.part <- simParam[-simParam.subset]
     llh.est <- function(llhParam){
-      simParam <- c(llhParam, simParam.part)
+      simParam[simParam.subset] <- llhParam
       simData <- replicate(noSims, simulator(simParam), simplify = F)
       llh <- simplify2array(lapply(X = simData, function(X) likelihood(X, sampleData, obsParam)))
 
@@ -71,6 +98,14 @@ COVIDexperiment <- function(experimentName, simulator, obsModel,
     }
   }
 
+
+  #'
+
+  #' @param priors
+  #' @param proposalType
+  #' @param varParam
+  #' @param runParallel
+  #' @return An adaptive MCMC and MCMC sampler
 
   MCMC_functions <- function(priors, proposalType, varParam, runParallel = TRUE){
 
