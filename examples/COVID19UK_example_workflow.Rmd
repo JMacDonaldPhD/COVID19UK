@@ -115,6 +115,45 @@ testingData <- COVID19UK::testingNGF(simOutput, c(0.5, 0.9, 0.6)) # NGF := Noise
 
 It may already be clear how we cannot calculate the likelihood of this sample data being obtained, given only the epidemic parameters. The uncertainty of all test results is dependent on the actual epidemic state of the individuals being tested. Hence the uncertainty in the sample data cannot be quantified without more information about the underlying epidemic process. The `testingLlh` function will calcualte the probability of a sample being generated, given a underlying epidemic process and a set of observation parameters.
 
+
+# Likelihood Maths
+
+$(S \to I)_{i}$, the number of infections in household $i$ on a given day.
+
+$\alpha$, Recruitment probability for new infection.
+
+$\pi$, sensitivity of test
+
+$\psi$, specitivity of test
+
+$T^{(j)}_i$, the total number of $j^{th}$ stage tests done in household $i$.
+
+$T^{(j)}_{i+}$, the number of $j^{th}$ stage tests in household $i$ which return a positive result.
+
+$T^{(j)}_{i-}$, the number of $j^{th}$ stage tests in household $i$ which return a negative result.
+
+Hence, $T^{(j)}_{i+} + T^{(j)}_{i-} = T^{(j)}_i$.
+
+$(SR)_{i+}$, number of tests of non-infectious individuals, which resulted in a positive result.
+
+$(I)_{i+}$, number of tests of non-new infectious individuals, which resulted in a positive result.
+
+$$ \prod_{i = 1}^{H} {{(S \to I)_i}\choose{T^{(1)}_i}} \alpha^{T^{(1)}_i} (1 - \alpha)^{(S \to I)_{i} - T^{(1)}_i} \hspace{10mm} \text{(Recruitment Process)}$$
+
+$$ \prod_{i = 1}^{H} {{T^{(1)}_{i}}\choose{T^{(1)}_{i+}}} \pi^{T^{(1)}_{i+}} (1 - \pi)^{T^{(1)}_{i+} - T^{(1)}_{i+}} \hspace{10mm} \text{(First Stage Testing)}$$
+\begin{align*}
+\prod_{i = 1}^{H} \sum_{(SR)_{i+}, I_{i+}} &{{S_i + R_i}\choose{(SR)_{i+}}} \psi^{(SR)_{+i}} (1 - \psi)^{S_{i} + R_{i} - (SR)_{i+}} \\ &{{I_i - (S \to I)_i}\choose{I_{+i}}} \pi^{I_{+i}} (1 - \pi)^{I_{i} - (S \to I)_{i} - I_{+i}} \\  &\cdot 1\{(SR)_{+i} + I_{+i} = T^{(2)}_{i+}\}\hspace{10mm} \text{(Second Stage Testing)}
+\end{align*}
+
+## Notes
+
+Total Likelihood = Recruitment Process * First Stage Testing * Second Stage Testing
+
+In the second stage testing, for each household, we sum over all possible number of false positives ($(SR)_{i+}$) and true positives ($I_{i+}$) that give the required total number of second stage positive tests observed ($T^{(2)}_{i+}$).
+
+
+
+
 ```{r}
 
 obsParam <- c(alpha = 0.5, pi = 0.9, psi = 0.6)
@@ -182,13 +221,22 @@ lines(time, householdModel$res$SIRsummary[, 2], col = 'red')
 lines(time, householdModel$res$SIRsummary[, 3], col = 'grey')
 
 
+```
+
+
+
+# Estimation Likelihood
+
+```{r}
+
+
 
 hh_llhCalc <- householdModel$likelihoodCalc_function(simParam_names = c("beta_G", "beta_H"), obsParam = obsParam)
 
 
 
-beta_G.seq <- seq(0.001, 0.5, length = 200)
-beta_H.seq <- seq(0.001, 0.5, length = 200)
+beta_G.seq <- seq(0.001, 0.25, length = 200)
+beta_H.seq <- seq(0.001, 0.25, length = 200)
 
 betaGrid <- expand.grid(beta_G.seq, beta_H.seq)
 start <- as.numeric(Sys.time())
@@ -200,7 +248,10 @@ print(c("Estimated Time to calculate likelihood values: ", timeTaken*(40000/1000
 
 betaGrid$llh <- apply(betaGrid[, 1:2], MARGIN = 1, FUN = hh_llhCalc)
 
+
 ```
+
+
 
 
 # Plotting Profile Likelihoods 
@@ -215,7 +266,7 @@ beta_G.profile <- log(colMeans(exp(z)))
 beta_H.profile <- log(rowMeans(exp(z)))
 # Small beta values not return small likelihood values? why?
 
-debug(hh_llhCalc)
+#undebug(hh_llhCalc)
 hh_llhCalc(c(0.1,0.1))
 par(mfrow = c(1, 2))
 
