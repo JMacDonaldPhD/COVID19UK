@@ -89,6 +89,16 @@ Visualising the epidemic here.
 
 # visualising the epidemic here. 
 
+# General Epidemic Curve
+par(mfrow = c(1, 2))
+time <- 0:5
+plot(time, simOutput$SIRsummary[, 1], type = 'l', col = 'blue', ylim = c(0, N))
+lines(time, simOutput$SIRsummary[, 2], col = 'red')
+lines(time, simOutput$SIRsummary[, 3], col = 'grey')
+
+l,p
+
+
 ```
 
 
@@ -107,7 +117,9 @@ testingData <- COVID19UK::testingNGF(simOutput, c(0.5, 0.9, 0.6)) # NGF := Noise
 It may already be clear how we cannot calculate the likelihood of this sample data being obtained, given only the epidemic parameters. The uncertainty of all test results is dependent on the actual epidemic state of the individuals being tested. Hence the uncertainty in the sample data cannot be quantified without more information about the underlying epidemic process. The `testingLlh` function will calcualte the probability of a sample being generated, given a underlying epidemic process and a set of observation parameters.
 
 ```{r}
-COVID19UK::testingLlh(simOutput, testingData, c(0.5, 0.9, 0.6))
+
+obsParam <- c(alpha = 0.5, pi = 0.9, psi = 0.6)
+COVID19UK::testingLlh(simOutput, testingData, obsParam)
 
 ```
 
@@ -119,7 +131,7 @@ Clearly, the probability of obsersving the generated sample dataset is non-zero,
 # Second Value is log-likelihood of first stage tests (i.e the results of testing those who were recruited)
 # The final result is the first 2 values added plus the log-likehood of second stage testing (i.e the results of test
 # from households which had a positive first stage test)
-COVID19UK::testingLlh(simOutput, testingData, c(0.1, 0.9, 0.6))
+COVID19UK::testingLlh(simOutput, testingData, obsParam = obsParam)
 
 ```
 
@@ -136,7 +148,7 @@ Straight Simulations
 
 uncondSimOutput <- simulator(simParam)
 
-COVID19UK::testingLlh(uncondSimOutput, testingData c(0.5, 0.9, 0.6))
+COVID19UK::testingLlh(uncondSimOutput, testingData, obsParam = c(0.5, 0.9, 0.6))
 
 
 ```
@@ -157,18 +169,54 @@ COVID19UK::testingLlh(condSimOutput, testingData, c(0.5, 0.9, 0.6))
 ```
 
 
+Setting up epidemic model for analysis
+
+```{r}
+
+varNames <- c("beta_G", "beta_H", "gamma", "alpha", "pi", "psi")
+householdModel <- COVID19UK::epiModel(simulator, obsModel = list(NGF = testingNGF, llh = testingLlh), simParam, obsParam, varNames, seed = NULL, conditional = TRUE)
+
+hh_llhCalc <- householdModel$likelihoodCalc_function(simParam_names = c("beta_G", "beta_H"), obsParam = obsParam)
 
 
 
+beta_G.seq <- seq(0.001, 0.5, length = 200)
+beta_H.seq <- seq(0.001, 0.5, length = 200)
+
+betaGrid <- expand.grid(beta_G.seq, beta_H.seq)
+start <- as.numeric(Sys.time())
+testCalc <- apply(betaGrid[1:1000,], MARGIN = 1, FUN = hh_llhCalc)
+timeTaken <- as.numeric(Sys.time()) - start
+
+print(c("Estimated Time to calculate likelihood values: ", timeTaken*(40000/1000)))
 
 
+betaGrid$llh <- apply(betaGrid[, 1:2], MARGIN = 1, FUN = hh_llhCalc)
+
+```
 
 
+# Plotting Profile Likelihoods 
 
 
+```{r}
 
 
+z <- matrix(betaGrid$llh, nrow = length(beta_G.seq), ncol = length(beta_H.seq))
 
+beta_G.profile <- log(colMeans(exp(z)))
+beta_H.profile <- log(rowMeans(exp(z)))
+# Small beta values not return small likelihood values? why?
+
+debug(hh_llhCalc)
+hh_llhCalc(c(0.1,0.1))
+par(mfrow = c(1, 2))
+
+plot(beta_G.seq, beta_G.profile, type = 'l')
+plot(beta_H.seq, beta_H.profile, type = 'l')
+
+
+```
 
 
 

@@ -100,11 +100,11 @@ testingLlh <- function(completeData, sampleData, obsParam){
   NROWS <- nrow(completeData$Infections)
   NCOLS <- ncol(completeData$Infections)
   llh_alpha <- sum(dbinom(sampleData$firstStageTests, size = completeData$Infections, prob = alpha, log = TRUE))
-  print(llh_alpha)
+  #print(llh_alpha)
 
   # First stage testing probability, only reliant on sample dataset
   llh_firstStageTest <- sum(dbinom(sampleData$ptveFirstStage, size = sampleData$firstStageTests, prob = pi, log = TRUE))
-  print(llh_firstStageTest)
+  #print(llh_firstStageTest)
 
   if(llh_alpha == -Inf | llh_firstStageTest == -Inf){
     return(-Inf)

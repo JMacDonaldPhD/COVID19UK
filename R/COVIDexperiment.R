@@ -20,7 +20,7 @@
 #' @return A likelihood estimation function and MCMC set up function
 epiModel <- function(simulator, obsModel,
                      simParam, obsParam, varNames, seed = NULL, conditional = TRUE){
-  print(ls(environment(fun = simulator)))
+  #print(ls(environment(fun = simulator)))
   # Create Directory for Experiments
   # If a directory already exists with name "dir", then the directory will not be created
   # but the wd will be set to dir
