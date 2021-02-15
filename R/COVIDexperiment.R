@@ -216,7 +216,7 @@ epiModel <- function(simulator, obsModel,
   }
   print("Experiment set up. Do not change directory! Files will not save where you may expect them to")
 
-  return(list(MCMC_functions = MCMC_functions, likelihoodCalc_function = likelihoodCalc_function))
+  return(list(MCMC_functions = MCMC_functions, likelihoodCalc_function = likelihoodCalc_function, res = res))
 }
 
 

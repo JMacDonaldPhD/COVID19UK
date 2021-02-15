@@ -96,7 +96,6 @@ plot(time, simOutput$SIRsummary[, 1], type = 'l', col = 'blue', ylim = c(0, N))
 lines(time, simOutput$SIRsummary[, 2], col = 'red')
 lines(time, simOutput$SIRsummary[, 3], col = 'grey')
 
-l,p
 
 
 ```
@@ -174,7 +173,15 @@ Setting up epidemic model for analysis
 ```{r}
 
 varNames <- c("beta_G", "beta_H", "gamma", "alpha", "pi", "psi")
-householdModel <- COVID19UK::epiModel(simulator, obsModel = list(NGF = testingNGF, llh = testingLlh), simParam, obsParam, varNames, seed = NULL, conditional = TRUE)
+householdModel <- COVID19UK::epiModel(simulator, obsModel = list(NGF = testingNGF, llh = testingLlh), simParam, obsParam, varNames, seed = 1, conditional = TRUE)
+
+par(mfrow = c(1, 2))
+time <- 0:5
+plot(time, householdModel$res$SIRsummary[, 1], type = 'l', col = 'blue', ylim = c(0, N))
+lines(time, householdModel$res$SIRsummary[, 2], col = 'red')
+lines(time, householdModel$res$SIRsummary[, 3], col = 'grey')
+
+
 
 hh_llhCalc <- householdModel$likelihoodCalc_function(simParam_names = c("beta_G", "beta_H"), obsParam = obsParam)
 
