@@ -40,13 +40,12 @@ Create a population structure. This should be a dataframe, with each row represe
 
 ```{r}
 
-
-N <- 200 # Size of the population
+numberHouseholds <- 10
 N_h <- 4 # Size of each household
-
+N <- N_h*numberHouseholds # Size of the population
 # Define initial state of individuals
 indState0 <- rep(1, N)
-indState0[(1:10)*4] <- 2 # Setting one person out of the first 10 households to be infected
+indState0[(0:3)*4 + 1] <- 2 # Setting one person out of the first 10 households to be infected
 
 # dataframe structure for population
 pop <- data.frame(ID = 1:N,
@@ -64,8 +63,8 @@ Create simulation model. The `HouseholdSIR` function takes the population struct
 
 
 ```{r}
-
-simulator <- COVID19UK::HouseholdSIR(pop, endTime = 5) # Default start time is startTime = 0
+# if PRINT = TRUE, a day by day breakdown of the epidemic state will be printed.
+simulator <- COVID19UK::HouseholdSIR(pop, endTime = 1e2, PRINT = FALSE) # Default start time is startTime = 0
 
 ```
 
@@ -74,9 +73,12 @@ Now, we can define the parameters for simulation and simulate a Household SIR ep
 
 ```{r}
 # Define epidemic parameters
+
+set.seed(2)
 simParam <- c(beta_G = .25, beta_H = .2, gamma = .25)
 
 # Simulate an epidemic
+#debug(simulator)
 simOutput <- simulator(simParam) # This is the simulator function created above, not a function with the COVID19UK package.
 
 
@@ -90,8 +92,8 @@ Visualising the epidemic here.
 # visualising the epidemic here. 
 
 # General Epidemic Curve
-par(mfrow = c(1, 2))
-time <- 0:5
+par(mfrow = c(1, 1))
+time <- 0:(nrow(simOutput$SIRsummary) - 1)
 plot(time, simOutput$SIRsummary[, 1], type = 'l', col = 'blue', ylim = c(0, N))
 lines(time, simOutput$SIRsummary[, 2], col = 'red')
 lines(time, simOutput$SIRsummary[, 3], col = 'grey')
@@ -101,17 +103,181 @@ lines(time, simOutput$SIRsummary[, 3], col = 'grey')
 ```
 
 
-So far, we have defined the underlying epidemic model and simulated a realisation of such an epidemi given a set of parameters. Ultimately, we are interested in analysing epidemic data, with the goal of estimating the epidemic parameters and/or make projections, which will inform decision-making. Ideally, we would like to know the epidemic state of every individaul, on every day within a given time frame. Unfortunately, this is most likely not possible due to time/money constraints, or the inability to observe an individuals epidemic state with absolute certainty. Consequently, we must rely on a subset of the epidemic data for analysis. This brings many challanges, as well as many proposed ways to overcome these challenges.
+what does a typical epidemic look like for this set of parameters?
 
-One challenge which is applicable in a lot of situations, is there not being a closed form for the likelihood of epidemic parameters, given the sampled data (the underlying epidemic process is assumed to be unobserved). To overcome this, an unbiased estimate of the this likelihood is constructed, which can then be used as a proxy for Maximum Likelihood Estimation, or in a Bayesian setting, in a Markov chain Monte Carlo sampler (which requires a closed form likelihood).
-
-Let's first focus on obtaining a sample of epidemic data. The example below takes the epidemic simulated above (`simOutput`) and applys an observation process. The observation process is an informed testing scheme, which recruits of portion of individuals who move into the infectious state. On arrival to the infectious state, there is a non-zero probability $\alpha$ that the individual will be tested. If the test returns a positive results, the rest of the individuals household is tested. Of course, the test is imperfect, with the uncertainty of the test depending on the true state of the individual being tested. The specitivity $\pi$ is the probability of a positive test result, given the individual is in fact infectious. The sensitivity $\psi$ is the probability of a negative test result, given the individual is not infectious. These 3 parameters are specific to the observation process and so will be referred to as the observation parameters. The `TestingNGF` function will carry out the above testing scheme, given a set of observation parameters and a realisation of a household SIR epidemic.
+Let's plot the distribution of final sizes for a 1000 different epidemics
 
 ```{r}
 
-testingData <- COVID19UK::testingNGF(simOutput, c(0.5, 0.9, 0.6)) # NGF := Noise Generating Function
+set.seed(1)
+simParam <- c(beta_G = .25, beta_H = 0.2, gamma = .25)
+simulations <- replicate(n = 1e4, simulator(simParam), simplify = F)
+
+finalSizes <- sapply(X = simulations, FUN = function(X) sum(X$SIRsummary[nrow(X$SIRsummary), 2:3]))
+averageHouseholdFinalSizes <- sapply(X = simulations, FUN = function(X) mean(X$householdFinalSize))
+propHousholdsFullyInfected <- sapply(X = simulations, FUN = function(X) sum(X$householdFinalSize == N_h)/numberHouseholds)
+
+par(mfrow = c(1, 3))
+
+plot(density(finalSizes, from = 0, to = N), xlab = "Size of epidemic \n (Day 10)", main = "")
+plot(density(averageHouseholdFinalSizes, from = 0, to = N_h), xlab = "Average size of household epidemic \n (Day 10)", main = "")
+
+hist.default(propHousholdsFullyInfected, breaks = (0:10)/10, main = "", xlab = "Prop. of Households Fully Infected \n (Day 10)")
+#plot(density(propHousholdsFullyInfected, from = 0, to = 1), main = "Prop. of Households Fully Infected (Day 10)")
+
 
 ```
+
+
+Simulates an epidemic which is representative of a typical epidemic given these parameters.
+
+```{r}
+
+
+`%<<%` <- function(x, y){
+  return(x > y[1] & x < y[2])
+}
+
+epidemicSizeBounds <- rep(mean(finalSizes),2) + c(-5, 5)
+
+avgHouseholdSizeBounds <- rep(mean(averageHouseholdFinalSizes), 2) + c(-.5, .5)
+
+epidemicSize <- 0
+avgHouseholdSize <- 0
+while(!((epidemicSize %<<% epidemicSizeBounds) &
+      (avgHouseholdSize %<<% avgHouseholdSizeBounds))){
+  simulatedEpidemic <- simulator(simParam)
+  epidemicSize <- sum(simulatedEpidemic$SIRsummary[endTime + 1, 2:3])
+  avgHouseholdSize <- mean(simulatedEpidemic$householdFinalSize)
+}
+
+
+
+# General Epidemic Curve
+par(mfrow = c(1, 1))
+time <- 0:(nrow(simulatedEpidemic$SIRsummary) - 1)
+plot(time, simulatedEpidemic$SIRsummary[, 1], type = 'l', col = 'blue', ylim = c(0, N))
+lines(time, simulatedEpidemic$SIRsummary[, 2], col = 'red')
+lines(time, simulatedEpidemic$SIRsummary[, 3], col = 'grey')
+
+
+
+
+```
+
+
+
+So far, we have defined the underlying epidemic model and simulated a 'typical' realisation of such an epidemic given a set of parameters. Ultimately, we are interested in analysing epidemic data, with the goal of estimating the epidemic parameters and/or make projections, which will inform decision-making. Ideally, we would like to know the epidemic state of every individaul, on every day within a given time frame. Unfortunately, this is most likely not possible due to time/money constraints, or the inability to observe an individuals epidemic state with absolute certainty. Consequently, we must rely on a subset of the epidemic data for analysis. This brings many challanges, as well as many proposed ways to overcome these challenges.
+
+One challenge which is applicable in a lot of situations, is there not being a closed form for the likelihood of epidemic parameters, given the sampled data (the underlying epidemic process is assumed to be unobserved). To overcome this, an unbiased estimate of the this likelihood is constructed, which can then be used as a proxy for Maximum Likelihood Estimation, or in a Bayesian setting, to calculate a Markov chain Monte Carlo (MCMC) acceptance probability (which requires a closed form likelihood).
+
+Let's first focus on obtaining a sample of epidemic data. The example below takes the epidemic simulated above (`simOutput`) and applys an observation process. The observation process is an informed testing scheme, which recruits of portion of individuals who move into the infectious state. On arrival to the infectious state, there is a non-zero probability $\alpha$ that the individual will be ascertained. On ascertainment, the household that the individual resides in is followed up for testing (the ascertained individual is not tested as it is assumed they have become infectious recently). The test is imperfect, with the uncertainty of the test depending on the true state of the individual being tested. The specitivity $\pi$ is the probability of a positive test result, given the individual is in fact infectious. The sensitivity $1 - \psi$ is the probability of a negative test result, given the individual is not infectious. $\alpha$, $\pi$ and $\psi$ are specific to the observation process and so will be referred to as the observation parameters. The `TestingNGF` function will carry out the above testing scheme, given a set of observation parameters and a realisation of a household SIR epidemic.
+
+
+```{r}
+
+# if PRINT = TRUE, a day by day breakdown of testing results will be printed
+obsParam <- c(alpha = .1, pi = .9, psi = .6)
+testingData <- COVID19UK::testingNGF(simulatedEpidemic, obsParam, obsWindow = c(1, 10), PRINT = FALSE) # NGF := Noise Generating Function
+
+
+# Plot summary of simulated sample
+# Number of recruited households on a given day
+# Number of positive tests
+# Number of negative tests
+# Cumulative
+
+dailyNegTests <- rowSums(testingData$ntveSecondStageTests)
+dailyPosTests <- rowSums(testingData$ptveSecondStageTests)
+
+cumNoTests <- cumsum(dailyPosTests + dailyNegTests)
+
+plot(cumNoTests, col = 'blue', type = 'l', ylim = c(0, max(cumNoTests) + 1), ylab = "Cumulative # Tests",
+     xlab = "Time (Days)")
+
+lines(cumsum(dailyNegTests), col = 'red', lty = 2)
+lines(cumsum(dailyPosTests), col = 'green', lty = 3)
+
+legend("topleft", legend = c("Total", "Positive", "Negative"), col = c("blue", "green", "red"), lty = c(1, 3, 2))
+
+
+
+
+```
+
+Distribution of total tests, positive tests, negative tests
+
+```{r}
+
+
+set.seed(1)
+samples <- replicate(n = 1e4, COVID19UK::testingNGF(simulatedEpidemic, obsParam = obsParam, obsWindow = c(1, 10), PRINT = FALSE), simplify = F)
+
+totalTests <- sapply(X = samples, FUN = function(X) sum(X$ntveSecondStageTests + X$ptveSecondStageTests))
+totalPosTests <- sapply(X = samples, FUN = function(X) sum(X$ptveSecondStageTests))
+totalNegTests <- sapply(X = samples, FUN = function(X) sum(X$ntveSecondStageTests))
+
+par(mfrow = c(1, 3))
+
+plot(density(totalTests, from = 0, to = N), xlab = "Total Number of Tests \n (Day 10)", main = "", xlim = c(0, max(totalTests) + 5))
+plot(density(totalPosTests, from = 0, to = N), xlab = "Total Number of Positive Tests \n (Day 10)", main = "", xlim = c(0, max(totalPosTests) + 5))
+plot(density(totalNegTests, from = 0, to = N), xlab = "Total Number of Negative Tests \n (Day 10)", main = "", xlim = c(0, max(totalNegTests) + 5))
+
+hist(totalTests, breaks = seq(0, max(totalTests) + 5, by = 2.5))
+hist(totalPosTests, breaks = seq(0, max(totalPosTests) + 5, by = 2))
+hist(totalNegTests, breaks = seq(0, max(totalNegTests)+ 5, by = 2))
+
+
+
+```
+
+Simulating a representative sample
+
+```{r}
+
+totalNegTestsBounds <- rep(mean(totalNegTests), 2) + c(-5, 5)
+totalPosTestsBounds <- rep(mean(totalPosTests), 2) + c(-5, 5)
+
+totalTestsBounds <- rep(mean(totalTests)) + c(-5, 5)
+
+totalNegTestsSample <- 0
+totalPosTestsSample <- 0
+totalTestsSample <- 0
+#debug(COVID19UK::testingNGF)
+while(!(totalNegTestsSample %<<% totalNegTestsBounds &
+      totalPosTestsSample %<<% totalPosTestsBounds &
+      totalTestsSample %<<% totalTestsBounds)){
+
+  simulatedSample <- COVID19UK::testingNGF(simulatedEpidemic, obsParam = obsParam, obsWindow = c(1, 10), PRINT = FALSE) 
+  totalTestsSample <- sum(simulatedSample$ntveSecondStageTests + simulatedSample$ptveSecondStageTests)
+  totalPosTestsSample <- sum(simulatedSample$ptveSecondStageTests)
+  totalNegTestsSample <- sum(simulatedSample$ntveSecondStageTests)
+}
+
+dailyNegTests <- rowSums(simulatedSample$ntveSecondStageTests)
+dailyPosTests <- rowSums(simulatedSample$ptveSecondStageTests)
+
+cumNoTests <- cumsum(dailyPosTests + dailyNegTests)
+
+plot(cumNoTests, col = 'blue', type = 'l', ylim = c(0, max(cumNoTests) + 1), ylab = "Cumulative # Tests",
+     xlab = "Time (Days)")
+
+lines(cumsum(dailyNegTests), col = 'red', lty = 2)
+lines(cumsum(dailyPosTests), col = 'green', lty = 3)
+
+legend("topleft", legend = c("Total", "Positive", "Negative"), col = c("blue", "green", "red"), lty = c(1, 3, 2))
+
+
+
+
+
+```
+
+
+
+
+
+
 
 It may already be clear how we cannot calculate the likelihood of this sample data being obtained, given only the epidemic parameters. The uncertainty of all test results is dependent on the actual epidemic state of the individuals being tested. Hence the uncertainty in the sample data cannot be quantified without more information about the underlying epidemic process. The `testingLlh` function will calcualte the probability of a sample being generated, given a underlying epidemic process and a set of observation parameters.
 
@@ -140,10 +306,22 @@ $(I)_{i+}$, number of tests of non-new infectious individuals, which resulted in
 
 $$ \prod_{i = 1}^{H} {{(S \to I)_i}\choose{T^{(1)}_i}} \alpha^{T^{(1)}_i} (1 - \alpha)^{(S \to I)_{i} - T^{(1)}_i} \hspace{10mm} \text{(Recruitment Process)}$$
 
+The above is interested in the probability of recruiting each individual who has become infected.
+
+If it doesn't matter who was recruited and just whether or not the household itself is to be followed up, then the following should be calculated
+
+
+Probability of recruitment of a household is $P_{ri}(\alpha, (S \to I)_i) = (1 - (1 - \alpha)^{(S \to I)_{i}})$, a function of the individual recruitment probability and the number of new infections in that household on a given day. To simplyfy, the reliance on these variables will be assumed (i.e $P_{ri}(\alpha, (S \to I)_i) \equiv P_{ri}$ )
+
+$$ \prod_{i = 1}^{H} P_{ri}^{1\{Recruited_{i}\}}(1 - P_{ri})^{1 - 1\{Recruited_{i}\}}$$
+
+
 $$ \prod_{i = 1}^{H} {{T^{(1)}_{i}}\choose{T^{(1)}_{i+}}} \pi^{T^{(1)}_{i+}} (1 - \pi)^{T^{(1)}_{i+} - T^{(1)}_{i+}} \hspace{10mm} \text{(First Stage Testing)}$$
+$$
 \begin{align*}
-\prod_{i = 1}^{H} \sum_{(SR)_{i+}, I_{i+}} &{{S_i + R_i}\choose{(SR)_{i+}}} \psi^{(SR)_{+i}} (1 - \psi)^{S_{i} + R_{i} - (SR)_{i+}} \\ &{{I_i - (S \to I)_i}\choose{I_{+i}}} \pi^{I_{+i}} (1 - \pi)^{I_{i} - (S \to I)_{i} - I_{+i}} \\  &\cdot 1\{(SR)_{+i} + I_{+i} = T^{(2)}_{i+}\}\hspace{10mm} \text{(Second Stage Testing)}
+\prod_{i = 1}^{H} \sum_{(SR)_{i+}, I_{i+}} &{{S_i + R_i}\choose{(SR)_{i+}}} \psi^{(SR)_{+i}} (1 - \psi)^{S_{i} + R_{i} - (SR)_{i+}} \\ &{{I_i - T^{(1)}_{i}}\choose{I_{+i}}} \pi^{I_{+i}} (1 - \pi)^{I_{i} - T^{(1)}_{i} - I_{+i}} \\  &\cdot 1\{(SR)_{+i} + I_{+i} = T^{(2)}_{i+}\}\hspace{10mm} \text{(Second Stage Testing)}
 \end{align*}
+$$
 
 ## Notes
 
@@ -156,8 +334,8 @@ In the second stage testing, for each household, we sum over all possible number
 
 ```{r}
 
-obsParam <- c(alpha = 0.5, pi = 0.9, psi = 0.6)
-COVID19UK::testingLlh(simOutput, testingData, obsParam)
+llhvalue <- COVID19UK::testingLlh(simulatedEpidemic, simulatedSample, obsParam, PRINT = FALSE)
+llhvalue
 
 ```
 
@@ -169,7 +347,7 @@ Clearly, the probability of obsersving the generated sample dataset is non-zero,
 # Second Value is log-likelihood of first stage tests (i.e the results of testing those who were recruited)
 # The final result is the first 2 values added plus the log-likehood of second stage testing (i.e the results of test
 # from households which had a positive first stage test)
-COVID19UK::testingLlh(simOutput, testingData, obsParam = obsParam)
+COVID19UK::testingLlh(simulatedEpidemic, simulatedSample, obsParam = rep(0.7, 3))
 
 ```
 
@@ -179,43 +357,50 @@ So we can calculate the likelihood of observing the testing sample, given the un
 * blah blah blah *
 
 
-Straight Simulations
+# Straight Simulations
 
 ```{r}
 
 
 uncondSimOutput <- simulator(simParam)
 
-COVID19UK::testingLlh(uncondSimOutput, testingData, obsParam = c(0.5, 0.9, 0.6))
+COVID19UK::testingLlh(uncondSimOutput, simulatedSample, obsParam = obsParam)
 
 
 ```
 
 
-Conditional Simualtions 
+# Conditional Simualtions 
+
+Conditions on the number of new infections which are ascertained, forcing the simulation to draw a sufficient number of new infections, but also prevent too many infections occuring in order to leave sufficient susceptibles remaining for future ascertainments.
+
 
 ```{r}
 
 # Creates a simulator which conditions on the testing data
-condSim <- COVID19UK::conditionalTestingHouseholdSIR(testingData, pop, startTime = 0 , endTime = 5)
+condSim <- COVID19UK::conditionalTestingHouseholdSIR(simulatedSample, pop, startTime = 0 , endTime = endTime)
 
 condSimOutput <- condSim(simParam)
 
 
-COVID19UK::testingLlh(condSimOutput, testingData, c(0.5, 0.9, 0.6))
+COVID19UK::testingLlh(condSimOutput, simulatedSample, obsParam)
 
 ```
 
 
-Setting up epidemic model for analysis
+# Setting up epidemic model for analysis
+
+`epiModel` returns a list of functions which can be used to carry out likelihood estimation of epidemic parameters (or a subset of epidemic parameters) and set up an MCMC sampler. `epiModel` takes the defined epidemic model (`simulator` or, in general, the output of `householdSIR`), the defined observation model (a list with named entries `NGF` and `llh`, representing the Noise generating function and likelihood calculation function respectively)
+
 
 ```{r}
 
 varNames <- c("beta_G", "beta_H", "gamma", "alpha", "pi", "psi")
-householdModel <- COVID19UK::epiModel(simulator, obsModel = list(NGF = testingNGF, llh = testingLlh), simParam, obsParam, varNames, seed = 1, conditional = TRUE)
+
+householdModel <- COVID19UK::epiModel(simulator, obsModel = list(NGF = testingNGF, llh = testingLlh), simParam, obsParam, varNames, seed = NULL, conditional = F , simulatedSample = simulatedSample, simulatedEpidemic = simulatedEpidemic)
 
 par(mfrow = c(1, 2))
-time <- 0:5
+time <- 0:endTime
 plot(time, householdModel$res$SIRsummary[, 1], type = 'l', col = 'blue', ylim = c(0, N))
 lines(time, householdModel$res$SIRsummary[, 2], col = 'red')
 lines(time, householdModel$res$SIRsummary[, 3], col = 'grey')
@@ -231,19 +416,19 @@ lines(time, householdModel$res$SIRsummary[, 3], col = 'grey')
 
 
 
-hh_llhCalc <- householdModel$likelihoodCalc_function(simParam_names = c("beta_G", "beta_H"), obsParam = obsParam)
+hh_llhCalc <- householdModel$likelihoodCalc_function(simParam_names = c("beta_G", "beta_H"), obsParam = obsParam, noSims = 20)
 
 
 
-beta_G.seq <- seq(0.001, 0.25, length = 200)
-beta_H.seq <- seq(0.001, 0.25, length = 200)
+beta_G.seq <- seq(0, 0.5, length = 500)
+beta_H.seq <- seq(0, 0.5, length = 500)
 
 betaGrid <- expand.grid(beta_G.seq, beta_H.seq)
 start <- as.numeric(Sys.time())
 testCalc <- apply(betaGrid[1:1000,], MARGIN = 1, FUN = hh_llhCalc)
 timeTaken <- as.numeric(Sys.time()) - start
 
-print(c("Estimated Time to calculate likelihood values: ", timeTaken*(40000/1000)))
+print(c("Estimated Time to calculate likelihood values: ", timeTaken*(nrow(betaGrid)/1000)))
 
 
 betaGrid$llh <- apply(betaGrid[, 1:2], MARGIN = 1, FUN = hh_llhCalc)
@@ -256,6 +441,9 @@ betaGrid$llh <- apply(betaGrid[, 1:2], MARGIN = 1, FUN = hh_llhCalc)
 
 # Plotting Profile Likelihoods 
 
+Calculates Profile Likelihoods for each infection parameter (Global & Household).
+
+
 
 ```{r}
 
@@ -266,21 +454,14 @@ beta_G.profile <- log(colMeans(exp(z)))
 beta_H.profile <- log(rowMeans(exp(z)))
 # Small beta values not return small likelihood values? why?
 
-#undebug(hh_llhCalc)
-hh_llhCalc(c(0.1,0.1))
 par(mfrow = c(1, 2))
 
 plot(beta_G.seq, beta_G.profile, type = 'l')
+abline(v = simParam[1], lty = 2, col = "red")
 plot(beta_H.seq, beta_H.profile, type = 'l')
-
+abline(v = simParam[2], lty = 2, col = "red")
 
 ```
-
-
-
-
-
-
 
 
 

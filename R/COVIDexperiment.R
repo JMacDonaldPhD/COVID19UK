@@ -19,7 +19,7 @@
 #'             generation will be based on current R session.
 #' @return A likelihood estimation function and MCMC set up function
 epiModel <- function(simulator, obsModel,
-                     simParam, obsParam, varNames, seed = NULL, conditional = TRUE){
+                     simParam, obsParam, varNames, seed = NULL, conditional = TRUE, simulatedSample = NULL, simulatedEpidemic = NULL){
   #print(ls(environment(fun = simulator)))
   # Create Directory for Experiments
   # If a directory already exists with name "dir", then the directory will not be created
@@ -48,10 +48,18 @@ epiModel <- function(simulator, obsModel,
     set.seed(seed)
   }
 
-  res <- simulator(param = simParam)
+  providedSimulations <- !(is.null(simulatedSample) & is.null(simulatedEpidemic))
 
-  #print(c("FINAL SIZE:", sum(res)))
-  sampleData <- obsModel$NGF(res, obsParam)
+  if(!providedSimulations){
+    res <- simulator(param = simParam)
+    #print(c("FINAL SIZE:", sum(res)))
+    sampleData <- obsModel$NGF(res, obsParam)
+  } else{
+    sampleData <- simulatedSample
+    res <- simulatedEpidemic
+  }
+
+
   #totalPositiveCases <- colSums(dailyPositiveCases)
   likelihood <- obsModel$llh
 
@@ -86,7 +94,15 @@ epiModel <- function(simulator, obsModel,
     llh.est <- function(llhParam){
       simParam[simParam.subset] <- llhParam
       simData <- replicate(noSims, simulator(simParam), simplify = F)
-      llh <- simplify2array(lapply(X = simData, function(X) likelihood(X, sampleData, obsParam)))
+
+      if(conditional){
+        llh <- simplify2array(lapply(X = simData, function(X) likelihood(X, sampleData, obsParam) + X$logP))
+      } else{
+        llh <- simplify2array(lapply(X = simData, function(X) likelihood(X, sampleData, obsParam)))
+      }
+
+
+
 
       llh.mean <- log(mean(exp(llh)))
 

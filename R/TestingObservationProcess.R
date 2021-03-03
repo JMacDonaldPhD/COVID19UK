@@ -20,7 +20,27 @@
 # AND false negative tests where a new infection arises and is tested but fails to be detected.
 
 # If pi = 1, psi = 1, then we arrive at the original biased household sampling scheme.
-testingNGF <- function(completeData, obsParam){
+testingNGF <- function(completeData, obsParam, obsWindow = c(1, Inf), PRINT = FALSE){
+
+  # 1st entry in these matrices is the intial state before day 1 of pandemic
+  completeData$Hstate$S <- completeData$Hstate$S[-1, ]
+  completeData$Hstate$I <- completeData$Hstate$I[-1, ]
+  completeData$Hstate$R <- completeData$Hstate$R[-1, ]
+
+
+
+  # Cut down complete data to the days which epidemic is observed
+  if(is.infinite(obsWindow[2])){
+    obsWindow[2] <- nrow(completeData$Infections)
+  }
+
+  daysObserved <- obsWindow[1]:obsWindow[2]
+  completeData$Hstate$S <- completeData$Hstate$S[daysObserved, ]
+  completeData$Hstate$I <- completeData$Hstate$I[daysObserved, ]
+  completeData$Hstate$R <- completeData$Hstate$R[daysObserved, ]
+
+  completeData$Infections <- completeData$Infections[daysObserved, ]
+
   alpha <- obsParam[1]
   pi <- obsParam[2]
   psi <- obsParam[3]
@@ -31,14 +51,17 @@ testingNGF <- function(completeData, obsParam){
   NCOLS <- ncol(completeData$Infections)
 
   # Which new cases are tested
-  firstStageTests <- matrix(rbinom(n_trials, size = completeData$Infections, prob = alpha),
+  ascertainedIndividuals <- matrix(rbinom(n_trials, size = completeData$Infections, prob = alpha),
                   nrow = NROWS, ncol = NCOLS)
-  whichHHfirstStage <- firstStageTests > 0
+
+
+
+  whichHHascertained <- ascertainedIndividuals > 0
 
   # Testing; Which of the new cases which are tested are detected.
-  ptveFirstStage <- matrix(rbinom(n_trials, size = firstStageTests, prob = pi),
-                          nrow = NROWS, ncol = NCOLS)
-  whichHHptveFirstStage <- ptveFirstStage > 0
+  # ptveFirstStage <- matrix(rbinom(n_trials, size = firstStageTests, prob = pi),
+  #                         nrow = NROWS, ncol = NCOLS)
+  # whichHHptveFirstStage <- ptveFirstStage > 0
 
   # Household Testing; For those who tested tpositive, all other residents are tested
 
@@ -46,13 +69,13 @@ testingNGF <- function(completeData, obsParam){
   # on the individuals actual disease status.
 
   # Testing those who are infected
-  secondStageInfectedTests <- whichHHptveFirstStage * (completeData$Hstate$I[-1, ] - firstStageTests)
+  secondStageInfectedTests <- whichHHascertained * (completeData$Hstate$I - ascertainedIndividuals)
   ptveSecondStageInfectedTests <- matrix(rbinom(n_trials, size = secondStageInfectedTests,
                                            prob = pi), nrow = NROWS, ncol = NCOLS)
 
   # Testing those who are not infected
-  secondStageNoninfectedTests <- whichHHptveFirstStage * (completeData$Hstate$S[-1, ] +
-                                        completeData$Hstate$R[-1, ])
+  secondStageNoninfectedTests <- whichHHascertained * (completeData$Hstate$S+
+                                        completeData$Hstate$R)
   ntveSecondStageNoninfectedTests <- matrix(rbinom(n_trials, size = secondStageNoninfectedTests, prob = psi),
                                     nrow = NROWS, ncol = NCOLS)
 
@@ -63,10 +86,12 @@ testingNGF <- function(completeData, obsParam){
   #totalNegatives <- (tests - PositiveTests) + negative_noninfected_tests + (infected_tests - positive_infected_tests)
 
 
-  sampleData <- list(firstStageTests = firstStageTests, ptveFirstStage = ptveFirstStage,
+  sampleData <- list(ascertainedIndividuals = ascertainedIndividuals,
                     ptveSecondStageTests = ptveSecondStageTests,
                     ntveSecondStageTests = ntveSecondStageTests)
-
+  if(PRINT){
+    print(sampleData)
+  }
   return(sampleData)
 }
 
@@ -74,7 +99,7 @@ testingNGF <- function(completeData, obsParam){
 
 ptveTestDensity_hh <- function(ntveTests, ptveTests, S, I, R, x, pi, psi){
   if(ntveTests + ptveTests == 0){
-    return(0)
+    return(0) # Second Stage Testing did not occur in this household
   }
   # possible True Positives, lpp
   poss_tp <- (0:(I - x))[0:(I - x) <= ptveTests]
@@ -93,20 +118,36 @@ ptveTestDensity_hh <- function(ntveTests, ptveTests, S, I, R, x, pi, psi){
 }
 
 
-testingLlh <- function(completeData, sampleData, obsParam){
+testingLlh <- function(completeData, sampleData, obsParam, PRINT = FALSE){
   alpha <- obsParam[1]
   pi <- obsParam[2]
   psi <- obsParam[3]
   NROWS <- nrow(completeData$Infections)
   NCOLS <- ncol(completeData$Infections)
-  llh_alpha <- sum(dbinom(sampleData$firstStageTests, size = completeData$Infections, prob = alpha, log = TRUE))
-  #print(llh_alpha)
+
+
+  llh_alpha_breakdown <- dbinom(sampleData$ascertainedIndividuals, size = completeData$Infections, prob = alpha, log = TRUE)
+  if(PRINT){
+    print("Recruitment Process")
+    print(llh_alpha_breakdown)
+  }
+  llh_alpha <- sum(llh_alpha_breakdown)
 
   # First stage testing probability, only reliant on sample dataset
-  llh_firstStageTest <- sum(dbinom(sampleData$ptveFirstStage, size = sampleData$firstStageTests, prob = pi, log = TRUE))
+  # llh_firstStageTest_breakdown <- dbinom(sampleData$ptveFirstStage, size = sampleData$firstStageTests, prob = pi, log = TRUE)
+  # if(PRINT){
+  #   print("First Stage Testing")
+  #   print(llh_firstStageTest_breakdown)
+  # }
+  # llh_firstStageTest <- sum(llh_firstStageTest_breakdown)
   #print(llh_firstStageTest)
 
-  if(llh_alpha == -Inf | llh_firstStageTest == -Inf){
+  if(llh_alpha == -Inf){
+    if(PRINT){
+      print(c("Testing Likelihood Not Calculated"))
+      print(c("Total Log-likelihood:", -Inf))
+    }
+
     return(-Inf)
   }
 
@@ -116,7 +157,7 @@ testingLlh <- function(completeData, sampleData, obsParam){
                        completeData$Hstate$S[i + 1, X],
                        completeData$Hstate$I[i + 1, X],
                        completeData$Hstate$R[i + 1, X],
-                       sampleData$firstStageTests[i, X],
+                       sampleData$ascertainedIndividuals[i, X],
                        pi, psi)
     if(is.nan(result)){
       print(c(i, X))
@@ -131,10 +172,14 @@ testingLlh <- function(completeData, sampleData, obsParam){
     }
     #p <- sum(sapply(X = 1:NCOLS, FUN = func, i = i))
     #llh_secondStageTest <- p + llh_secondStageTest
-
-    #print(c(i, llh_secondStageTest))
   }
-  return(sum(llh_secondStageTest) + llh_alpha + llh_firstStageTest)
+  if(PRINT){
+    print("Second Stage Testing")
+    print(llh_secondStageTest)
+
+    print(c("Total Log-likelihood:", sum(llh_secondStageTest) + llh_alpha))
+  }
+  return(sum(llh_secondStageTest) + llh_alpha)
 }
 
 
