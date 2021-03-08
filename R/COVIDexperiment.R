@@ -20,6 +20,18 @@
 #' @return A likelihood estimation function and MCMC set up function
 epiModel <- function(simulator, obsModel,
                      simParam, obsParam, varNames, seed = NULL, conditional = TRUE, simulatedSample = NULL, simulatedEpidemic = NULL){
+
+
+  simulator <- eval(simulator)
+  obsModel <- eval(obsModel)
+  simParam <- eval(simParam)
+  obsParam <- eval(obsParam)
+  varNames <- eval(varNames)
+  seed <- eval(seed)
+  simulatedSample <- eval(simulatedSample)
+  simulatedEpidemic <- eval(simulatedEpidemic)
+
+
   #print(ls(environment(fun = simulator)))
   # Create Directory for Experiments
   # If a directory already exists with name "dir", then the directory will not be created
@@ -91,7 +103,7 @@ epiModel <- function(simulator, obsModel,
   likelihoodCalc_function <- function(simParam_names, obsParam, noSims = 1, calc.sd = F){
     simParam.subset <- which(varNames %in% simParam_names)
     simParam.part <- simParam[-simParam.subset]
-    llh.est <- function(llhParam){
+    llh_est <- function(llhParam){
       simParam[simParam.subset] <- llhParam
       simData <- replicate(noSims, simulator(simParam), simplify = F)
 
@@ -112,6 +124,7 @@ epiModel <- function(simulator, obsModel,
       }
       return(llh.mean)
     }
+    return(llh_est)
   }
 
 

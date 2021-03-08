@@ -1,0 +1,15 @@
+Population size
+100
+
+Household Size
+4
+
+beta[G] (Global Infection Rate)
+0.075
+
+beta[H] (Within-household Infection Rate)
+0.1
+
+gamma (Removal rate)
+0.1
+

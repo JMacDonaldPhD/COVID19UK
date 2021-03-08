@@ -40,12 +40,12 @@ Create a population structure. This should be a dataframe, with each row represe
 
 ```{r}
 
-numberHouseholds <- 10
+numberHouseholds <- 100
 N_h <- 4 # Size of each household
 N <- N_h*numberHouseholds # Size of the population
 # Define initial state of individuals
 indState0 <- rep(1, N)
-indState0[(0:3)*4 + 1] <- 2 # Setting one person out of the first 10 households to be infected
+indState0[(0:30)*4 + 1] <- 2 # Setting one person out of the first 10 households to be infected
 
 # dataframe structure for population
 pop <- data.frame(ID = 1:N,
@@ -64,7 +64,8 @@ Create simulation model. The `HouseholdSIR` function takes the population struct
 
 ```{r}
 # if PRINT = TRUE, a day by day breakdown of the epidemic state will be printed.
-simulator <- COVID19UK::HouseholdSIR(pop, endTime = 1e2, PRINT = FALSE) # Default start time is startTime = 0
+endTime <- 3
+simulator <- COVID19UK::HouseholdSIR(pop, endTime = endTime, PRINT = FALSE) # Default start time is startTime = 0
 
 ```
 
@@ -73,12 +74,11 @@ Now, we can define the parameters for simulation and simulate a Household SIR ep
 
 ```{r}
 # Define epidemic parameters
-
-set.seed(2)
 simParam <- c(beta_G = .25, beta_H = .2, gamma = .25)
 
 # Simulate an epidemic
 #debug(simulator)
+set.seed(1)
 simOutput <- simulator(simParam) # This is the simulator function created above, not a function with the COVID19UK package.
 
 
@@ -109,7 +109,6 @@ Let's plot the distribution of final sizes for a 1000 different epidemics
 
 ```{r}
 
-set.seed(1)
 simParam <- c(beta_G = .25, beta_H = 0.2, gamma = .25)
 simulations <- replicate(n = 1e4, simulator(simParam), simplify = F)
 
@@ -177,8 +176,8 @@ Let's first focus on obtaining a sample of epidemic data. The example below take
 ```{r}
 
 # if PRINT = TRUE, a day by day breakdown of testing results will be printed
-obsParam <- c(alpha = .1, pi = .9, psi = .6)
-testingData <- COVID19UK::testingNGF(simulatedEpidemic, obsParam, obsWindow = c(1, 10), PRINT = FALSE) # NGF := Noise Generating Function
+obsParam <- c(alpha = .2, pi = .9, psi = .6)
+testingData <- COVID19UK::testingNGF(simulatedEpidemic, obsParam, obsWindow = c(1, endTime), PRINT = FALSE) # NGF := Noise Generating Function
 
 
 # Plot summary of simulated sample
@@ -209,9 +208,7 @@ Distribution of total tests, positive tests, negative tests
 
 ```{r}
 
-
-set.seed(1)
-samples <- replicate(n = 1e4, COVID19UK::testingNGF(simulatedEpidemic, obsParam = obsParam, obsWindow = c(1, 10), PRINT = FALSE), simplify = F)
+samples <- replicate(n = 1e4, COVID19UK::testingNGF(simulatedEpidemic, obsParam = obsParam, obsWindow = c(1, endTime), PRINT = FALSE), simplify = F)
 
 totalTests <- sapply(X = samples, FUN = function(X) sum(X$ntveSecondStageTests + X$ptveSecondStageTests))
 totalPosTests <- sapply(X = samples, FUN = function(X) sum(X$ptveSecondStageTests))
@@ -248,7 +245,7 @@ while(!(totalNegTestsSample %<<% totalNegTestsBounds &
       totalPosTestsSample %<<% totalPosTestsBounds &
       totalTestsSample %<<% totalTestsBounds)){
 
-  simulatedSample <- COVID19UK::testingNGF(simulatedEpidemic, obsParam = obsParam, obsWindow = c(1, 10), PRINT = FALSE) 
+  simulatedSample <- COVID19UK::testingNGF(simulatedEpidemic, obsParam = obsParam, obsWindow = c(1, endTime), PRINT = FALSE) 
   totalTestsSample <- sum(simulatedSample$ntveSecondStageTests + simulatedSample$ptveSecondStageTests)
   totalPosTestsSample <- sum(simulatedSample$ptveSecondStageTests)
   totalNegTestsSample <- sum(simulatedSample$ntveSecondStageTests)
@@ -428,7 +425,7 @@ start <- as.numeric(Sys.time())
 testCalc <- apply(betaGrid[1:1000,], MARGIN = 1, FUN = hh_llhCalc)
 timeTaken <- as.numeric(Sys.time()) - start
 
-print(c("Estimated Time to calculate likelihood values: ", timeTaken*(nrow(betaGrid)/1000)))
+print(c("Estimated Time to calculate likelihood values (mins): ", timeTaken*(nrow(betaGrid)/1000)/60))
 
 
 betaGrid$llh <- apply(betaGrid[, 1:2], MARGIN = 1, FUN = hh_llhCalc)
