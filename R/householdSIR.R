@@ -89,6 +89,7 @@ HouseholdSIR <- function(pop, startTime = 0, endTime = Inf, PRINT = FALSE){
   # S, P, I, R is a simulation of the underlying epidemic process
   # Hospital Admissions is a draw from the observation process given S, P, I, R, the total number of people who were admitted
   # to hospital.
+  #debug(sim)
   sim <- function(param){
     beta_G <- param[1]
     beta_H <- param[2]
@@ -104,15 +105,15 @@ HouseholdSIR <- function(pop, startTime = 0, endTime = Inf, PRINT = FALSE){
       A <- matrix(nrow = endTime + 1, ncol = n_hh)
     }
 
-    SIRsummary[1, ] <- StateX
+    time <- 0
+    SIRsummary[time + 1, ] <- StateX
     epidemic <- list(S = A, I = A, R = A)
-    epidemic$S[1, ] <- Hstate[,1]
-    epidemic$I[1, ] <- Hstate[,2]
-    epidemic$R[1, ] <- Hstate[,3]
+    epidemic$S[time + 1, ] <- Hstate[,1]
+    epidemic$I[time + 1, ] <- Hstate[,2]
+    epidemic$R[time + 1, ] <- Hstate[,3]
 
-    Infections <- A[-1, ]
-    day <- 1
-    while(day < endTime + 1 & day < maxSimDays){
+    Infections <- A[-1, , drop = F]
+    while(time < endTime  & time < maxSimDays){
 
       # ==== Daily Contact ====
 
@@ -126,23 +127,24 @@ HouseholdSIR <- function(pop, startTime = 0, endTime = Inf, PRINT = FALSE){
                                   gamma)
       StateX <- dayProgression$StateX
       Hstate <- dayProgression$Hstate
-      epidemic$S[day + 1, ] <- Hstate[,1]
-      epidemic$I[day + 1, ] <- Hstate[,2]
-      epidemic$R[day + 1, ] <- Hstate[,3]
-      SIRsummary[day + 1, ] <- dayProgression$StateX
-      Infections[day, ] <- dayProgression$Infections
+      time <- time + 1
 
-      if(StateX[2] == 0 & day < endTime){
-        for(i in (day + 1):(nrow(epidemic$S) - 1)){
+      epidemic$S[time + 1, ] <- Hstate[,1]
+      epidemic$I[time + 1, ] <- Hstate[,2]
+      epidemic$R[time + 1, ] <- Hstate[,3]
+      SIRsummary[time + 1, ] <- dayProgression$StateX
+      Infections[time, ] <- dayProgression$Infections
+
+      if(StateX[2] == 0 & time < endTime){
+        for(i in (time + 1):(nrow(epidemic$S) - 1)){
           epidemic$S[i + 1, ] <- Hstate[,1]
           epidemic$I[i + 1, ] <- Hstate[,2]
           epidemic$R[i + 1, ] <- Hstate[,3]
           SIRsummary[i + 1, ] <- dayProgression$StateX
           Infections[i, ] <- rep(0, nrow(Hstate))
         }
-        day <- endTime + 1
+        time <- endTime + 1
       }
-      day <- day + 1
     }
     if(PRINT){
       print("Day by day household States:")
@@ -161,9 +163,9 @@ HouseholdSIR <- function(pop, startTime = 0, endTime = Inf, PRINT = FALSE){
       Infections[-cutData[-length(cutData)], ]
 
     }
-
+    #Hstate2 <- Hstate
     return(list(Hstate = epidemic, SIRsummary = SIRsummary,
-                householdFinalSize = rowSums(Hstate[, 2:3]) - startingSize,
+                householdFinalSize = rowSums(Hstate[, 2:3]),
                 Infections = Infections))
   }
   return(sim)

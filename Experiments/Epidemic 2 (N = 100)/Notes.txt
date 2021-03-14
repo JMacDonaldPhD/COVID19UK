@@ -1,0 +1,2 @@
+Increase speed of epidemic slightly to get more events happening in first day.
+

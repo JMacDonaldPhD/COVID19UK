@@ -20,7 +20,7 @@
 # AND false negative tests where a new infection arises and is tested but fails to be detected.
 
 # If pi = 1, psi = 1, then we arrive at the original biased household sampling scheme.
-testingNGF <- function(completeData, obsParam, obsWindow = c(1, Inf), PRINT = FALSE){
+testingNGF <- function(completeData, obsParam, obsWindow = c(0, Inf), PRINT = FALSE){
 
   # 1st entry in these matrices is the intial state before day 1 of pandemic
   completeData$Hstate$S <- completeData$Hstate$S[-1, ]
@@ -34,24 +34,26 @@ testingNGF <- function(completeData, obsParam, obsWindow = c(1, Inf), PRINT = FA
     obsWindow[2] <- nrow(completeData$Infections)
   }
 
-  daysObserved <- obsWindow[1]:obsWindow[2]
-  completeData$Hstate$S <- completeData$Hstate$S[daysObserved, ]
-  completeData$Hstate$I <- completeData$Hstate$I[daysObserved, ]
-  completeData$Hstate$R <- completeData$Hstate$R[daysObserved, ]
+  daysObserved <- (obsWindow[1]:obsWindow[2])[-1]
 
-  completeData$Infections <- completeData$Infections[daysObserved, ]
+  S <- completeData$Hstate$S[daysObserved, , drop = F]
+  I <- completeData$Hstate$I[daysObserved, , drop = F]
+  R <- completeData$Hstate$R[daysObserved, , drop = F]
+
+
+  Infections <- completeData$Infections[daysObserved, , drop = F]
 
   alpha <- obsParam[1]
   pi <- obsParam[2]
   psi <- obsParam[3]
-  n_trials <- length(completeData$Infections)
+  n_trials <- length(Infections)
 
-  NROWS <- nrow(completeData$Infections)
+  NROWS <- nrow(Infections)
   # Testing; Which of the new cases which are tested are detected.
-  NCOLS <- ncol(completeData$Infections)
+  NCOLS <- ncol(Infections)
 
   # Which new cases are tested
-  ascertainedIndividuals <- matrix(rbinom(n_trials, size = completeData$Infections, prob = alpha),
+  ascertainedIndividuals <- matrix(rbinom(n_trials, size = Infections, prob = alpha),
                   nrow = NROWS, ncol = NCOLS)
 
 
@@ -69,13 +71,12 @@ testingNGF <- function(completeData, obsParam, obsWindow = c(1, Inf), PRINT = FA
   # on the individuals actual disease status.
 
   # Testing those who are infected
-  secondStageInfectedTests <- whichHHascertained * (completeData$Hstate$I - ascertainedIndividuals)
+  secondStageInfectedTests <- whichHHascertained * (I - ascertainedIndividuals)
   ptveSecondStageInfectedTests <- matrix(rbinom(n_trials, size = secondStageInfectedTests,
                                            prob = pi), nrow = NROWS, ncol = NCOLS)
 
   # Testing those who are not infected
-  secondStageNoninfectedTests <- whichHHascertained * (completeData$Hstate$S+
-                                        completeData$Hstate$R)
+  secondStageNoninfectedTests <- whichHHascertained * (S + R)
   ntveSecondStageNoninfectedTests <- matrix(rbinom(n_trials, size = secondStageNoninfectedTests, prob = psi),
                                     nrow = NROWS, ncol = NCOLS)
 
@@ -165,6 +166,8 @@ testingLlh <- function(completeData, sampleData, obsParam, PRINT = FALSE){
     return(result)
   }
   llh_secondStageTest <- matrix(nrow = NROWS, ncol = NCOLS)
+
+  #print(c(NROWS, NCOLS))
 
   for(i in 1:NROWS){
     for(X in 1:NCOLS){
