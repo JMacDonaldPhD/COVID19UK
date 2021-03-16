@@ -3,7 +3,7 @@
 # Create 'true' epidemic given a set of 'true' epidemic parameters
 
 rm(list = ls())
-setwd("C:/Users/Josh/git/COVID19UK/Experiments/Epidemic 6 (N = 200, scaled)")
+setwd("C:/Users/Work/Documents/git/COVID19UK/Experiments/Epidemic 6 (N = 200, scaled)/")
 
 
 `%<<%` <- function(x, y){
