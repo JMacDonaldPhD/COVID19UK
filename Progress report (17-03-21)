@@ -1,0 +1,27 @@
+
+Done in since last commit (15/03/21):
+
+Wrote household permutation function (NOT TESTED AT TIme of writiNG)
+
+- Takes simulation and sample and calculates likelihood
+
+- If zero likelihood, it is determined which households are exchangable from the initial state simulated from
+
+- Then these household are permuted, and likelihood is calcluated once again
+
+- Households are permuted in this way unitl a non-zero likelihood arises, or a predetermined maximum number of permutations is reached.
+
+
+
+
+To work on:
+
+# ==== Maths
+
+Test household permutation function
+
+# ==== Code Matainance
+
+# Make directories in experiment files general to the user running the code
+
+# Bake population into a simulation function, seperate from the initial state.

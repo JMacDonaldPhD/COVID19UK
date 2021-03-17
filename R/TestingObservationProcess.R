@@ -185,10 +185,59 @@ testingLlh <- function(completeData, sampleData, obsParam, PRINT = FALSE){
   return(sum(llh_secondStageTest) + llh_alpha)
 }
 
+# For exchangeability, you need to know which households were in the same epidemic state at the start of the simulation to the point of first observation.
+#
+# The indicies of the households which were in the same epidemic state can be permuted at the point of first observation until a valid permutation is found.
+#
+# Calculates the possible epidemic states for a household of size hhSize in an SIR epidemic
+possibleHHSIRstates <- function(hhSize){
+  x <- 0:4
+  x.grid <- expand.grid(x, x, x)
+  possibleStates <- as.matrix(x.grid[rowSums(x.grid) == 4, ])
+  dimnames(possibleStates) <- NULL
+  return(possibleStates)
+}
+
+TestingLlh_exchangeability <- function(completeData, sampleData, obsParam, intialState, maxPermutations){
+
+  # Calculate likelihood with default indexing
+  llh_calc <- testingLlh(completeData, sampleData, obsParam, PRINT = FALSE)
 
 
+  # Find exchangeable sets from initial conditions
+
+  if(is.infinite(llh_calc)){
+    sets <- list()
+    for(i in 1:nrow(possibleStates)){
+      sets[[i]] <- which(apply(X = initialState, MARGIN = 1, FUN = function(X) isTRUE(all.equal(X, possibleStates[i, ]))))
+    }
+    sets <- sets[sapply(sets, function(X) length(X) > 0)]
+  }
 
 
+  permNo <- 1 # 1st permutation
+  while(is.infinite(llh_calc) & permNo <= maxPermutations){
+    # Permutate households
+    permSets <- lapply(sets, function(X) sample(X, size = length(X)))
+
+    # Assign permutations
+    permCompleteData <- completeData
+    for(i in 1:length(sets)){
+
+      # CompleteData$, infections, HState (s, I, R)
+
+      permCompleteData$Infections[, sets[[i]]] <- permCompleteData$Infections[, permSets[[i]]]
+
+      permCompleteData$Hstate$S[, sets[[i]]] <-  permCompleteData$Hstate$S[, permSets[[i]]]
+      permCompleteData$Hstate$I[, sets[[i]]] <-  permCompleteData$Hstate$I[, permSets[[i]]]
+      permCompleteData$Hstate$R[, sets[[i]]] <-  permCompleteData$Hstate$R[, permSets[[i]]]
+    }
+
+    # Calc likelihood for new permutation
+    llh_calc <- testingLlh(permCompleteData, sampleData, obsParam, PRINT = FALSE)
+    permNo <- permNo + 1 # will try another permutation if llh_calc is -Inf
+  }
+}
 
 
 
