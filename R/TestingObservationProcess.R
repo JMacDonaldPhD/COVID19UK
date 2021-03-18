@@ -242,3 +242,8 @@ TestingLlh_exchangeability <- function(completeData, sampleData, obsParam, intia
 
 
 
+
+
+
+
+
