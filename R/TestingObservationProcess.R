@@ -148,7 +148,7 @@ testingLlh <- function(completeData, sampleData, obsParam, PRINT = FALSE){
       print(c("Testing Likelihood Not Calculated"))
       print(c("Total Log-likelihood:", -Inf))
     }
-
+    #print(c("llh value:", -Inf))
     return(-Inf)
   }
 
@@ -182,6 +182,7 @@ testingLlh <- function(completeData, sampleData, obsParam, PRINT = FALSE){
 
     print(c("Total Log-likelihood:", sum(llh_secondStageTest) + llh_alpha))
   }
+  #print(c("llh value:", sum(llh_secondStageTest) + llh_alpha))
   return(sum(llh_secondStageTest) + llh_alpha)
 }
 
@@ -198,45 +199,60 @@ possibleHHSIRstates <- function(hhSize){
   return(possibleStates)
 }
 
-TestingLlh_exchangeability <- function(completeData, sampleData, obsParam, intialState, maxPermutations){
+testingLlh_exchangeability <- function(intialState, maxPermutations = Inf){
 
-  # Calculate likelihood with default indexing
-  llh_calc <- testingLlh(completeData, sampleData, obsParam, PRINT = FALSE)
-
-
-  # Find exchangeable sets from initial conditions
-
-  if(is.infinite(llh_calc)){
-    sets <- list()
-    for(i in 1:nrow(possibleStates)){
-      sets[[i]] <- which(apply(X = initialState, MARGIN = 1, FUN = function(X) isTRUE(all.equal(X, possibleStates[i, ]))))
-    }
-    sets <- sets[sapply(sets, function(X) length(X) > 0)]
-  }
-
-
+  initialState <- eval(initialState)
+  maxPermutations <- eval(maxPermutations)
   permNo <- 1 # 1st permutation
-  while(is.infinite(llh_calc) & permNo <= maxPermutations){
-    # Permutate households
-    permSets <- lapply(sets, function(X) sample(X, size = length(X)))
 
-    # Assign permutations
-    permCompleteData <- completeData
-    for(i in 1:length(sets)){
-
-      # CompleteData$, infections, HState (s, I, R)
-
-      permCompleteData$Infections[, sets[[i]]] <- permCompleteData$Infections[, permSets[[i]]]
-
-      permCompleteData$Hstate$S[, sets[[i]]] <-  permCompleteData$Hstate$S[, permSets[[i]]]
-      permCompleteData$Hstate$I[, sets[[i]]] <-  permCompleteData$Hstate$I[, permSets[[i]]]
-      permCompleteData$Hstate$R[, sets[[i]]] <-  permCompleteData$Hstate$R[, permSets[[i]]]
-    }
-
-    # Calc likelihood for new permutation
-    llh_calc <- testingLlh(permCompleteData, sampleData, obsParam, PRINT = FALSE)
-    permNo <- permNo + 1 # will try another permutation if llh_calc is -Inf
+  # Determine permutable sets based on initial state
+  sets <- list()
+  possibleStates <- possibleHHSIRstates(hhSize)
+  for(i in 1:nrow(possibleStates)){
+    sets[[i]] <- which(apply(X = initialState, MARGIN = 1, FUN = function(X) isTRUE(all.equal(X, possibleStates[i, ]))))
   }
+  sets <- sets[sapply(sets, function(X) length(X) > 0)]
+  S <- length(sets)
+
+  permutations <- lapply(1:maxPermutations,
+                         function(X) return(lapply(sets, function(X) sample(X, size = length(X)))))
+
+  llh_calculator <- function(completeData, sampleData, obsParam){
+
+    # Calculate likelihood with default indexing
+    llh_calc <- testingLlh(completeData, sampleData, obsParam, PRINT = FALSE)
+
+    while(is.infinite(llh_calc) & permNo <= maxPermutations){
+      # Permutate households
+      permSets <- permutations[[permNo]]
+
+      # Assign permutations
+      permCompleteData <- completeData
+      for(j in 1:S){
+
+        # CompleteData$, infections, HState (S, I, R)
+
+        permCompleteData$Infections[, sets[[j]]] <- permCompleteData$Infections[, permSets[[j]]]
+
+        permCompleteData$Hstate$S[, sets[[j]]] <-  permCompleteData$Hstate$S[, permSets[[j]]]
+        permCompleteData$Hstate$I[, sets[[j]]] <-  permCompleteData$Hstate$I[, permSets[[j]]]
+        permCompleteData$Hstate$R[, sets[[j]]] <-  permCompleteData$Hstate$R[, permSets[[j]]]
+      }
+
+
+
+
+      # Calc likelihood for new permutation
+      llh_calc <- testingLlh(permCompleteData, sampleData, obsParam, PRINT = FALSE)
+      permNo <- permNo + 1 # will try another permutation if llh_calc is -Inf
+    }
+    #print(c("llh value:", llh_calc))
+    #print(c("No perms:", permNo - 1))
+    return(llh_calc)
+
+  }
+
+  return(llh_calculator)
 }
 
 

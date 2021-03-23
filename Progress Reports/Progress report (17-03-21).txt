@@ -1,6 +1,8 @@
 
 Done in since last commit (15/03/21):
 
+Last edited: 23/03/21
+
 Wrote household permutation function (NOT TESTED AT TIme of writiNG)
 
 - Takes simulation and sample and calculates likelihood
@@ -11,17 +13,16 @@ Wrote household permutation function (NOT TESTED AT TIme of writiNG)
 
 - Households are permuted in this way unitl a non-zero likelihood arises, or a predetermined maximum number of permutations is reached.
 
+- Permutation function works, but can much more intensive than straight simulations. 
 
+- When the project is loaded, a line of code is run taking the full path of the users working directory. This makes the running of experiments
+  portable to other users.
 
 
 To work on:
 
-# ==== Maths
-
-Test household permutation function
-
 # ==== Code Matainance
 
-# Make directories in experiment files general to the user running the code
-
 # Bake population into a simulation function, seperate from the initial state.
+
+
