@@ -24,21 +24,24 @@ HouseholdSIR <- function(pop, startTime = 0, endTime = Inf, PRINT = FALSE){
 
   # ==== Set up (Only needs to be done once per population) ====
 
-  hh_sizes <- as.numeric(table(pop$householdID))
+  #hh_sizes <- as.numeric(table(pop$householdID))
+  hh_size <- pop$N_M
   #print(c("Household Sizes", hh_sizes[1:10]))
-  n_hh <- length(unique(pop$householdID))
+  M <- length(pop$N_M)
+  #n_hh <- length(unique(pop$householdID))
 
-  N <- nrow(pop)
+  #N <- nrow(pop)
+  N <- sum(pop$N_M)
 
-  hhIndexMat <- sapply(1:n_hh, function(X) pop$householdID == X)
+  #hhIndexMat <- sapply(1:n_hh, function(X) pop$householdID == X)
 
-  Hstate <- t(apply(hhIndexMat, MARGIN = 2, function(X) with(pop, fast.tabulate(state[X], householdID[X]))))
+  #Hstate <- t(apply(hhIndexMat, MARGIN = 2, function(X) with(pop, fast.tabulate(state[X], householdID[X]))))
 
-  startingSize <- rowSums(Hstate[, 2:3])
+  #startingSize <- rowSums(Hstate[, 2:3])
 
 
   # Construct Population State Matrix using infectious status and groups
-  StateX <- colSums(Hstate)
+  #StateX <- colSums(Hstate)
 
   #print(StateX)
 
@@ -60,16 +63,17 @@ HouseholdSIR <- function(pop, startTime = 0, endTime = Inf, PRINT = FALSE){
     infProb <- 1 - exp(-(globalInfPressure + householdInfPressure))
 
     # S -> I
-    noInf <- rbinom(n_hh, size = Hstate[, 1], prob = infProb)
-
+    noInf <- rbinom(M, size = Hstate[, 1], prob = infProb)
+    logProb <- dbinom(noInf, size = Hstate[,1], prob = infProb)
     # I -> R
     removalRate <- gamma
-    noRem <- rbinom(n_hh, size = Hstate[, 2], prob = gamma)
+    noRem <- rbinom(M, size = Hstate[, 2], prob = gamma)
+    logProb <- logProb + dbinom(noRem, size = Hstate[,2], prob = gamma)
 
     # Update Household States
     Hstate <- Hstate +
-      noInf*matrix(stoch[1, ], nrow = n_hh, ncol = 3, byrow = T) +
-      noRem*matrix(stoch[2, ], nrow = n_hh, ncol = 3, byrow = T)
+      noInf*matrix(stoch[1, ], nrow = M, ncol = 3, byrow = T) +
+      noRem*matrix(stoch[2, ], nrow = M, ncol = 3, byrow = T)
 
     # Update population state
     totInf <- sum(noInf)
@@ -81,7 +85,7 @@ HouseholdSIR <- function(pop, startTime = 0, endTime = Inf, PRINT = FALSE){
       warning("Population State and Household States do not line up")
     }
 
-    return(list(Hstate = Hstate, StateX = StateX, Infections = noInf))
+    return(list(Hstate = Hstate, StateX = StateX, Infections = noInf, logProb = logProb))
   }
 
   dailyProg <- compiler::cmpfun(dailyProg)
@@ -90,7 +94,11 @@ HouseholdSIR <- function(pop, startTime = 0, endTime = Inf, PRINT = FALSE){
   # Hospital Admissions is a draw from the observation process given S, P, I, R, the total number of people who were admitted
   # to hospital.
   #debug(sim)
-  sim <- function(param){
+  sim <- function(I0, param){
+
+    Hstate <- cbind(pop$N_M - I0, I0, rep(0, M))
+    Hstate <- unname(Hstate)
+    StateX <- c(N - sum(I0), sum(I0), 0)
     beta_G <- param[1]
     beta_H <- param[2]
     gamma <- param[3]
@@ -99,10 +107,10 @@ HouseholdSIR <- function(pop, startTime = 0, endTime = Inf, PRINT = FALSE){
     # Stores summry of each epidemic state at the end of each day
     if(is.infinite(endTime)){
       SIRsummary <- matrix(nrow = maxSimDays + 1, ncol = 3)
-      A <- matrix(nrow = maxSimDays + 1, ncol = n_hh)
+      A <- matrix(nrow = maxSimDays + 1, ncol = M)
     } else{
       SIRsummary <- matrix(nrow = endTime + 1, ncol = 3)
-      A <- matrix(nrow = endTime + 1, ncol = n_hh)
+      A <- matrix(nrow = endTime + 1, ncol = M)
     }
 
     time <- 0
@@ -113,6 +121,8 @@ HouseholdSIR <- function(pop, startTime = 0, endTime = Inf, PRINT = FALSE){
     epidemic$R[time + 1, ] <- Hstate[,3]
 
     Infections <- A[-1, , drop = F]
+
+    logProb <- 0
     while(time < endTime  & time < maxSimDays){
 
       # ==== Daily Contact ====
@@ -134,7 +144,7 @@ HouseholdSIR <- function(pop, startTime = 0, endTime = Inf, PRINT = FALSE){
       epidemic$R[time + 1, ] <- Hstate[,3]
       SIRsummary[time + 1, ] <- dayProgression$StateX
       Infections[time, ] <- dayProgression$Infections
-
+      logProb <- logProb + dayProgression$logProb
       if(StateX[2] == 0 & time < endTime){
         for(i in (time + 1):(nrow(epidemic$S) - 1)){
           epidemic$S[i + 1, ] <- Hstate[,1]
@@ -166,7 +176,7 @@ HouseholdSIR <- function(pop, startTime = 0, endTime = Inf, PRINT = FALSE){
     #Hstate2 <- Hstate
     return(list(Hstate = epidemic, SIRsummary = SIRsummary,
                 householdFinalSize = rowSums(Hstate[, 2:3]),
-                Infections = Infections))
+                Infections = Infections, logProb = logProb))
   }
   return(sim)
 }

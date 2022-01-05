@@ -1,0 +1,33 @@
+
+
+Date of last commit: 23/03/21
+
+Last updated: 23/03/21 11:41
+
+# ==== COMPLETED ====
+
+
+
+# Things to work on
+
+
+# ==== MATHS ====
+
+- More realistic epidemic for likelihood estimation over multiple days (lower infection rate + removal rate)
+
+- Particle Filters
+
+- Compare multiple day simulation vs. Particle Filter
+
+
+
+# ==== Code Maintenance ====
+
+
+- Flow chart for model and data
+
+-
+
+- Bake population structure into simulation function
+
+

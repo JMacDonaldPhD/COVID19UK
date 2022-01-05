@@ -1,27 +1,26 @@
 Population size
-400
+100
 
 Household Size
 4
 
-Observation Period
-0
-2
-
 beta[G] (Global Infection Rate)
-0.025
+0.075
 
 beta[H] (Within-household Infection Rate)
-0.05
+0.1
 
 gamma (Removal rate)
-0.0714285714285714
+0.1
 
 alpha (new case ascertainment probability)
-0.05
+0.1
 
 pi (Test sensitivity)
 0.9
 
 psi (Test specitivity)
-0.98
+0.6
+
+Monte Carlo Samples:
+20

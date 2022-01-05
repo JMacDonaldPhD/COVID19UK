@@ -1,18 +1,21 @@
 rm(list = ls())
-setwd(paste0(c(proj_wd, "/Experiments/Epidemic 9 (N = 400, scaled)"), collapse = ""))
+setwd("C:/Users/Work/Documents/git/COVID19UK/Experiments/Epidemic 9 (N = 400, scaled)/")
 
 load("epidemic 9.RData")
 
 
-setwd(paste0(c(proj_wd, "/Experiments/Epidemic 9 (N = 400, scaled)/Testing (High Sensitivity, High Specificity)/Testing Scheme (alpha = 0.05)/"), collapse = ""))
+
+setwd("C:/Users/Work/Documents/git/COVID19UK/Experiments/Epidemic 9 (N = 400, scaled)/Testing (High Sensitivity, High Specificity)/Testing Scheme (alpha = 0.01)/")
 
 `%<<%` <- function(x, y){
   return(x > y[1] & x < y[2])
 }
 
+
+
 # ==== Simulating representative testing Data ====
-obsParam <- c(alpha = .05, pi = .9, psi = .98)
-obsWindow <- c(0, 2)
+obsParam <- c(alpha = .01, pi = .9, psi = .98)
+obsWindow <- c(0, 5)
 simulator <- COVID19UK::HouseholdSIR(pop, endTime = obsWindow[2], PRINT = FALSE) # Default start time is startTime = 0
 
 samples <- replicate(n = 1e4, COVID19UK::testingNGF(simulatedEpidemic, obsParam = obsParam, obsWindow = obsWindow, PRINT = FALSE), simplify = F)
@@ -24,7 +27,7 @@ totalNegTests <- sapply(X = samples, FUN = function(X) sum(X$ntveSecondStageTest
 #png(filename = "testing_summary_densities.png", width = 480*3)
 
 
-# par(mfrow = c(1, 3))
+#par(mfrow = c(1, 3))
 #
 # plot(density(totalTests, from = 0, to = N), xlab = "Total Number of Tests", main = "", xlim = c(0, max(totalTests) + 5))
 # plot(density(totalPosTests, from = 0, to = N), xlab = "Total Number of Positive Tests", main = "", xlim = c(0, max(totalPosTests) + 5))
@@ -125,29 +128,10 @@ dev.off()
 
 varNames <- c("beta_G", "beta_H", "gamma", "alpha", "pi", "psi")
 
-
-
-llh_calculator <- testingLlh
-#llh_calculator <- testingLlh_exchangeability(initialState, maxPermutations = 30)
-
-#
-#
-# householdModel <- COVID19UK::epiModel(simulator = simulator, obsModel = list(NGF = testingNGF, llh = llh_calculator), simParam, obsParam,
-#                                       varNames = varNames, seed = NULL, conditional = F , simulatedSample = simulatedSamples[[1]]$sample, simulatedEpidemic = simulatedEpidemic)
-#
-#
-#
-# llh_calc_beta <- householdModel$likelihoodCalc_function(simParam_names = c("beta_G", "beta_H"), obsParam = obsParam, noSims = 1)
-#
-# set.seed(1)
-# simulatedSamples[[1]]$MCsamples <- replicate(n = 10, llh_calc_beta(simParam[1:2]) , simplify = T)
-#
-
 for(i in 1:6){
   attach(simulatedSamples[[i]])
-  householdModel <- COVID19UK::epiModel(simulator = simulator, obsModel = list(NGF = testingNGF, llh = llh_calculator), simParam, obsParam,
+  householdModel <- COVID19UK::epiModel(simulator = simulator, obsModel = list(NGF = testingNGF, llh = testingLlh), simParam, obsParam,
                                         varNames = varNames, seed = NULL, conditional = F , simulatedSample = sample, simulatedEpidemic = simulatedEpidemic)
-
 
   llh_calc_beta <- householdModel$likelihoodCalc_function(simParam_names = c("beta_G", "beta_H"), obsParam = obsParam, noSims = 1)
 
@@ -213,7 +197,7 @@ close.connection(fileConnection)
 rm(list = ls()[!ls() %in% c("simParam", "simulatedEpidemic", "simulatedDSample", "N", "N_h", "obsParam", "householdModel"
                             )])
 
-save.image(file = "Testing Scheme (alpha = 0.05).RData")
+save.image(file = "Testing Scheme (alpha = 0.01).RData")
 
 rm(list = ls())
 

@@ -4,7 +4,7 @@
 
 rm(list = ls())
 # Test this on other machines
-setwd(paste0(c(proj_wd, "/Experiments/Epidemic 8 (N = 400, scaled)"), collapse = ""))
+setwd(paste0(c(proj_wd, "/Experiments/Epidemic 9 (N = 400, scaled)"), collapse = ""))
 
 
 `%<<%` <- function(x, y){
@@ -53,11 +53,11 @@ apply(X = pop_copy, MARGIN = 1, function(X) initialState[X[2], ] <<- initialStat
 # Ensures same 'true' epidemic and sample data is drawn each time. Not true as epidemic size is based on endTime
 # So endTime = 5 will result in a different 'true' epidemic to endTime = 10
 set.seed(10)
-simulator <- COVID19UK::HouseholdSIR(pop, startTime = 0, endTime = 200, PRINT = FALSE) # Default start time is startTime = 0
+simulator <- COVID19UK::HouseholdSIR(pop, startTime = 0, endTime = 100, PRINT = FALSE) # Default start time is startTime = 0
 
 # ==== Simulating a representative Epidemic ====
 
-simParam <- c(beta_G = 1.5*100/N, beta_H = 0.5, gamma = 0.5)
+simParam <- c(beta_G = 0.1*100/N, beta_H = 0.05, gamma = 1/14)
 simulations <- replicate(n = 1e4, simulator(simParam), simplify = F)
 
 finalSizes <- sapply(X = simulations, FUN = function(X) sum(X$SIRsummary[nrow(X$SIRsummary), 2:3]))
@@ -141,7 +141,7 @@ close.connection(fileConnection)
 
 rm(list = ls()[!ls() %in% c("simParam", "simulator", "simulatedEpidemic", "N", "N_h", "pop", "initialState")])
 
-save.image(file = "epidemic 8.RData")
+save.image(file = "epidemic 9.RData")
 
 rm(list = ls())
 

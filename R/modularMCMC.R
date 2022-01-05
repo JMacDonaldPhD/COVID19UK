@@ -1,8 +1,9 @@
 # Modular MCMC
 
 
-MCMC <- function(sampleData, theta0, priors, proposalType, simulator, likelihood, lambda, V, simParam, obsParam, noSims, noIts, burnIn,
-                 runParallel = TRUE){
+MCMC <- function(sampleData, I0, theta0, priors, proposalType, simulator,
+                 likelihood, lambda, V, simParam, obsParam, noSims, noIts,
+                 burnIn, runParallel = TRUE){
 
   start = as.numeric(Sys.time())
   # Adaptive Step
@@ -12,7 +13,8 @@ MCMC <- function(sampleData, theta0, priors, proposalType, simulator, likelihood
   s = length(simParam)
   o = length(obsParam)
   if(k != s + o){
-    stop("Length of Parameter vector does not match number of utility arguments given.")
+    stop("Length of Parameter vector does not match number of utility arguments
+         given.")
   } else if(!identical(unique(c(simParam, obsParam)),
                        sort(c(simParam, obsParam)))){
     stop("More than one purpose assigned to a parameter.")
@@ -36,10 +38,11 @@ MCMC <- function(sampleData, theta0, priors, proposalType, simulator, likelihood
       parallel::stopCluster(cl)
 
     } else{
-      sims = replicate(noSims, simulator(thetaCurr[simParam]), simplify = F)
+      sims = replicate(noSims, simulator(I0, thetaCurr[simParam]), simplify = F)
     }
 
-    logPCurr = sapply(X = sims, function(X) likelihood(X, sampleData, thetaCurr[obsParam]))
+    logPCurr = sapply(X = sims, function(X) likelihood(X, sampleData,
+                                                       thetaCurr[obsParam]))
     logPCurr = log(mean(exp(logPCurr)))
     logPostCurr = logPCurr + sum(evalPrior(thetaCurr, priors))
   }
@@ -53,7 +56,7 @@ MCMC <- function(sampleData, theta0, priors, proposalType, simulator, likelihood
   for(i in 1:noIts){
     pb$tick()
     # Proposal
-    thetaProp = RWMProposalMixed(thetaCurr, lambda, V, proposalType)
+    thetaProp <- RWMProposalMixed(thetaCurr, lambda, V, proposalType)
 
     if(runParallel){
       cl <- parallel::makePSOCKcluster(parallel::detectCores() - 1)
@@ -64,11 +67,13 @@ MCMC <- function(sampleData, theta0, priors, proposalType, simulator, likelihood
         }
       parallel::stopCluster(cl)
     } else{
-      sims <- replicate(noSims, simulator(param = thetaProp[simParam]), simplify = F)
+      sims <- replicate(noSims, simulator(I0, param = thetaProp[simParam]),
+                        simplify = F)
     }
 
 
-    logPProp <- sapply(X = sims, function(X) likelihood(X, sampleData, thetaProp[obsParam]))
+    logPProp <- sapply(X = sims, function(X) likelihood(X, sampleData,
+                                                        thetaProp[obsParam]))
     logPProp <- log(mean(exp(logPProp)))
     logPostProp <- logPProp + sum(evalPrior(thetaProp, priors))
     acceptProb <- logPostProp - logPostCurr
@@ -93,9 +98,10 @@ MCMC <- function(sampleData, theta0, priors, proposalType, simulator, likelihood
 }
 
 
-adaptiveMCMC <- function(sampleData, theta0, priors, proposalType, simulator, likelihood, lambda0, V0, simParam,
-                         obsParam, noSims, noIts, burnIn,
-                         runParallel = TRUE, delta = 0.05){
+adaptiveMCMC <- function(sampleData, I0, theta0, priors, proposalType,
+                         simulator, likelihood, lambda0, V0, simParam, obsParam,
+                         noSims, noIts, burnIn, runParallel = TRUE,
+                         delta = 0.05){
 
   start <- as.numeric(Sys.time())
   # Adaptive Step
@@ -105,7 +111,8 @@ adaptiveMCMC <- function(sampleData, theta0, priors, proposalType, simulator, li
   s <- length(simParam)
   o <- length(obsParam)
   if(k != s + o){
-    stop("Length of Parameter vector does not match number of utility arguments given.")
+    stop("Length of Parameter vector does not match number of utility arguments
+         given.")
   } else if(!identical(unique(c(simParam, obsParam)),
                        sort(c(simParam, obsParam)))){
     stop("More than one purpose assigned to a parameter.")
@@ -130,10 +137,12 @@ adaptiveMCMC <- function(sampleData, theta0, priors, proposalType, simulator, li
       parallel::stopCluster(cl)
 
     } else{
-      sims <- replicate(noSims, simulator(thetaCurr[simParam]), simplify = F)
+      sims <- replicate(noSims, simulator(I0, thetaCurr[simParam]),
+                        simplify = F)
     }
 
-    logPCurr <- sapply(X = sims, function(X) likelihood(X, sampleData, thetaCurr[obsParam]))
+    logPCurr <- sapply(X = sims, function(X) likelihood(X, sampleData,
+                                                        thetaCurr[obsParam]))
     logPCurr <- log(mean(exp(logPCurr)))
     logPostCurr <- logPCurr + sum(evalPrior(thetaCurr, priors))
   }
@@ -141,14 +150,17 @@ adaptiveMCMC <- function(sampleData, theta0, priors, proposalType, simulator, li
 
   lambda <- lambda0
   V <- V0
-  draws <- matrix(nrow = noIts + 1, ncol = length(thetaCurr) + 2 + length(as.vector(V[varParam, varParam])))
-  draws[1, ] <- c(thetaCurr, logPostCurr, lambda, as.vector(V[varParam, varParam]))
+  draws <- matrix(nrow = noIts + 1, ncol = length(thetaCurr) + 2 +
+                    length(as.vector(V[varParam, varParam])))
+  draws[1, ] <- c(thetaCurr, logPostCurr, lambda,
+                  as.vector(V[varParam, varParam]))
   noAccept <- 0
 
   print("Sampling Progress")
   pb <- progress::progress_bar$new(total = noIts)
   for(i in 1:noIts){
     pb$tick()
+    #print(i)
     # Proposal
 
     u.delta <- runif(1)
@@ -169,15 +181,18 @@ adaptiveMCMC <- function(sampleData, theta0, priors, proposalType, simulator, li
         }
       parallel::stopCluster(cl)
     } else{
-      sims <- replicate(noSims, simulator(param = thetaProp[simParam]), simplify = F)
+      sims <- replicate(noSims, simulator(I0, param = thetaProp[simParam]),
+                        simplify = F)
     }
 
 
-    logPProp <- sapply(X = sims, function(X) likelihood(X, sampleData, thetaProp[obsParam]))
+    logPProp <- sapply(X = sims, function(X) likelihood(X, sampleData,
+                                                        thetaProp[obsParam]))
     logPProp <- log(mean(exp(logPProp)))
     logPostProp <- logPProp + sum(evalPrior(thetaProp, priors))
     acceptProb <- logPostProp - logPostCurr
     #print(acceptProb)
+    #print(exp(acceptProb))
 
     u1 <- runif(1)
     if(log(u1) < acceptProb){
@@ -192,7 +207,8 @@ adaptiveMCMC <- function(sampleData, theta0, priors, proposalType, simulator, li
         lambda <- lambda - 0.07*(lambda/((i)^(1/3)))
       }
     }
-    draws[i+1, ] <- c(thetaCurr, logPostCurr, lambda, as.vector(V[varParam, varParam]))
+    draws[i+1, ] <- c(thetaCurr, logPostCurr, lambda, as.vector(V[varParam,
+                                                                  varParam]))
   }
   timeTaken <- as.numeric(Sys.time()) - start
   # Calculate Effective Sample Sizes (and Per Second) and Acceptance Rates

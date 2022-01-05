@@ -23,5 +23,6 @@ Imports:
     parallel,
     pryr,
     socialmixr,
-    data.table
+    data.table,
+    iterpc
     

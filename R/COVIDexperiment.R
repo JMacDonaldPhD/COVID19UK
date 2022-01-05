@@ -113,18 +113,32 @@ epiModel <- function(simulator, obsModel,
         llh <- simplify2array(lapply(X = simData, function(X) likelihood(X, sampleData, obsParam)))
       }
 
-
-
-
       llh.mean <- log(mean(exp(llh)))
 
       if(calc.sd){
         llh.sd <- log(sd(exp(llh)))
         return(list(mean = llh.mean, sd = sd.mean))
       }
-      return(llh.mean)
+      return(list(mean = llh.mean, particles = simData, weights = exp(llh)))
+      #return(likelihood(simData, sampleData, obsParam))
     }
     return(llh_est)
+  }
+
+  MCdefinition <- function(simParam, obsParam){
+    H <- function(X){
+      likelihood(res, X, obsParam)
+    }
+    f <- function(simParam){
+      sample <- function(){
+        return(simulator(simParam))
+      }
+      density <- function(X){
+        # WRITE epidemicDensity
+        return(epidemicDensity(X))
+      }
+      return(list(sample = sample, density = density))
+    }
   }
 
 
